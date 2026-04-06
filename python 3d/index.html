@@ -11,30 +11,31 @@
     <div class="flex h-screen">
         <div class="w-80 bg-[#1f2937] p-6 border-r border-gray-700 flex flex-col shadow-xl">
             <h2 class="text-xl font-bold mb-6 text-blue-400 flex items-center gap-2">
-                📂 Hasta Yönetimi
+                📂 Hasta Yönetimi (Patient Management)
             </h2>
 
             <div class="mb-8 p-4 bg-gray-800/50 rounded-2xl border border-blue-500/20 shadow-inner">
-                <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider mb-3">➕ Yeni Kayıt & Yükleme</h3>
+                <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider mb-3">➕ Yeni Kayıt & Yükleme (New Record & Upload)</h3>
                 <div class="space-y-3">
                     <input type="text" id="pName" placeholder="Hasta Adı Soyadı" 
                            class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
                     
                     <div class="relative group">
-                        <input type="file" id="pDicom" accept=".dcm,.dicom" class="hidden">
-                        <label for="pDicom" class="flex items-center justify-center w-full p-2.5 bg-gray-700 hover:bg-gray-600 rounded-xl cursor-pointer text-xs border border-dashed border-gray-500 transition-all">
-                            📁 DICOM Dosyası Seç
+                        <input type="file" id="pDicom" accept=".dcm,.dicom" class="hidden" multiple>
+                        <label for="pDicom" class="flex flex-col items-center justify-center w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-xl cursor-pointer text-xs border border-dashed border-gray-500 transition-all">
+                            <span>📁 DICOM Dosyalarını Seç</span>
+                            <span class="text-[10px] text-gray-400 mt-1">(Birden fazla seçebilirsiniz)</span>
                         </label>
                     </div>
 
                     <button onclick="saveAndUpload()" id="uploadBtn"
                             class="w-full bg-blue-600 hover:bg-blue-500 p-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95">
-                        Sisteme Kaydet
+                        Sisteme Kaydet (Save to System)
                     </button>
                 </div>
             </div>
 
-            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1 text-center">📋 Kayıtlı Hastalar</h3>
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1 text-center">📋 Kayıtlı Hastalar (Registered Patients)</h3>
             <div id="patientList" class="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                 <div class="text-center text-gray-500 text-sm py-10 italic">Yükleniyor...</div>
             </div>
@@ -42,12 +43,11 @@
             <button id="resetBtn" onclick="resetVRAM(event)" 
                     class="mt-6 w-full bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white p-4 rounded-xl border border-red-600/30 flex items-center justify-center gap-2 font-bold transition-all group">
                 <span id="resetIcon" class="group-hover:rotate-180 transition-transform duration-500">♻️</span> 
-                <span id="resetText">VRAM Sıfırla</span>
+                <span id="resetText">VRAM Sıfırla (Reset VRAM)</span>
             </button>
         </div>
 
         <div class="flex-1 p-8 flex flex-col relative bg-[#0e1117]">
-            
             <div id="progressArea" class="hidden mb-6 bg-gray-800/80 backdrop-blur-md p-5 rounded-2xl border border-blue-500/30 shadow-lg animate-pulse">
                 <div class="flex justify-between mb-3">
                     <span id="stepText" class="text-blue-300 font-bold tracking-tight">AI İşleniyor...</span>
@@ -60,15 +60,9 @@
 
             <div id="canvasBox" class="flex-1 bg-[#161b22] rounded-[2rem] border border-gray-800 relative shadow-2xl overflow-hidden group">
                 <div id="myPlot" class="w-full h-full opacity-0 transition-opacity duration-1000"></div>
-                
                 <div id="emptyMsg" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 pointer-events-none transition-all duration-500">
                     <div class="text-6xl mb-4 opacity-20">🧬</div>
                     <p class="text-xl font-light tracking-wide italic">Analiz için soldan hasta seçin veya yeni kayıt ekleyin...</p>
-                </div>
-
-                <div class="absolute bottom-6 left-1/2 -translate-x-1/2 flex gap-4 px-6 py-3 bg-gray-900/80 backdrop-blur rounded-full border border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span class="text-xs text-gray-400 border-r border-gray-700 pr-4">3D Görünüm: Aktif</span>
-                    <span class="text-xs text-gray-400">Mouse: Döndür/Yakınlaştır</span>
                 </div>
             </div>
         </div>
@@ -85,23 +79,27 @@
     <script>
         const API = "http://127.0.0.1:8001";
 
-        // MONGODB & ORTHANC KAYIT FONKSİYONU
         async function saveAndUpload() {
             const name = document.getElementById('pName').value;
             const fileInput = document.getElementById('pDicom');
             const btn = document.getElementById('uploadBtn');
 
-            if (!name || !fileInput.files[0]) {
-                alert("Lütfen hasta adını yazın ve DICOM dosyasını seçin.");
+            // Logic for multiple files / Çoklu dosya kontrolü
+            if (!name || fileInput.files.length === 0) {
+                alert("Lütfen hasta adını yazın ve en az bir DICOM dosyası seçin. (Please enter patient name and select at least one DICOM file.)");
                 return;
             }
 
             const formData = new FormData();
-            formData.append("file", fileInput.files[0]);
             formData.append("name", name);
+            
+            // Loop through selected files / Seçilen tüm dosyaları ekle
+            for (let i = 0; i < fileInput.files.length; i++) {
+                formData.append("files", fileInput.files[i]);
+            }
 
             btn.disabled = true;
-            btn.innerText = "Yükleniyor...";
+            btn.innerText = "Yükleniyor... (Uploading...)";
             btn.classList.add('bg-gray-600');
 
             try {
@@ -112,15 +110,15 @@
                 const result = await res.json();
 
                 if (result.status === "success") {
-                    alert("Kayıt Başarılı! MongoDB ve Orthanc güncellendi.");
-                    loadPatients(); // Listeyi yenile
+                    alert("Kayıt Başarılı! (Registration Successful!)");
+                    loadPatients();
                     document.getElementById('pName').value = "";
                     document.getElementById('pDicom').value = "";
                 } else {
                     throw new Error(result.message);
                 }
             } catch (e) {
-                alert("Hata: " + e.message);
+                alert("Hata (Error): " + e.message);
             } finally {
                 btn.disabled = false;
                 btn.innerText = "Sisteme Kaydet";
@@ -138,18 +136,13 @@
 
         async function startAnalysis(uuid, name, event) {
             if(event) event.preventDefault();
-            
-            // UI Reset
             document.querySelectorAll('#patientList button').forEach(b => b.classList.remove('patient-btn-active'));
             if(event) event.currentTarget.classList.add('patient-btn-active');
-            
             document.getElementById('emptyMsg').style.opacity = "0";
             document.getElementById('myPlot').style.opacity = "0";
 
             try {
                 setProgress(20, "DICOM Verileri PACS'tan Alınıyor...");
-                setProgress(40, "AI Modeli (SAM 2.1) İşleniyor...");
-                
                 const res = await fetch(`${API}/segment/${uuid}`);
                 if(!res.ok) throw new Error("GPU/VRAM Hatası oluştu!");
                 
@@ -171,7 +164,6 @@
                 };
 
                 await Plotly.newPlot('myPlot', traces, layout, {responsive: true, displayModeBar: false});
-                
                 document.getElementById('myPlot').style.opacity = "1";
                 setProgress(100, "Analiz Tamamlandı!");
                 setTimeout(() => document.getElementById('progressArea').classList.add('hidden'), 3000);
@@ -192,10 +184,10 @@
 
             try {
                 await fetch(`${API}/reset-vram`, {method: 'POST'});
-                alert("VRAM Temizlendi ve Servis Yeniden Başlatıldı!");
+                alert("VRAM Temizlendi! (VRAM Cleared!)");
                 loadPatients();
             } catch (e) {
-                alert("Bağlantı hatası.");
+                alert("Bağlantı hatası. (Connection error.)");
             } finally {
                 btn.disabled = false;
                 text.innerText = "VRAM Sıfırla";
@@ -214,9 +206,7 @@
             });
         }
 
-        // Başlangıçta yükle
         loadPatients();
     </script>
-    <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
 </body>
 </html>

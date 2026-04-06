@@ -1,76 +1,103 @@
-import os, time, requests, nibabel as nib, pyvista as pv, numpy as np, tempfile, shutil
+import os, time, requests, shutil, tempfile, urllib.parse
+from pathlib import Path  # Dosya yollarını yönetmek için eklendi
+import nibabel as nib, pyvista as pv, numpy as np
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
+from typing import List
+from dotenv import load_dotenv
+
+# --- .ENV YÜKLEME (GELİŞTİRİLMİŞ) ---
+# app.py'nin olduğu klasörü bul ve oradaki .env'yi yükle
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# --- KONFİGÜRASYON ---
-ORTHANC_URL = "http://127.0.0.1:8042"
-MONAI_URL = "http://127.0.0.1:8000"
+# --- CONFIGURATION FROM ENV ---
+MONGO_USER = os.getenv("MONGO_USER")
+MONGO_PASS = os.getenv("MONGO_PASS")
+MONGO_CLUSTER = os.getenv("MONGO_CLUSTER")
+ORTHANC_URL = os.getenv("ORTHANC_URL")
+MONAI_URL = os.getenv("MONAI_URL")
 
-# MongoDB Atlas Bağlantısı (db_password kısmını kendi şifrenle değiştir!)
-MONGO_URI = "mongodb+srv://furkanyilmazandev_db_user:<db_password>@cluster0.fn4srdj.mongodb.net/?appName=Cluster0"
+# --- HATA KONTROLÜ (CRITICAL) ---
+if MONGO_PASS is None:
+    print(f"❌ HATA: .env dosyasından MONGO_PASS okunamadı!")
+    print(f"Aranan dosya yolu: {env_path.absolute()}")
+    print("Lütfen .env dosyasının 'python 3d' klasörü içinde olduğundan emin olun.")
+    exit(1) # Uygulamayı durdur
+
+# URL Encoding for MongoDB Password
+encoded_pass = urllib.parse.quote_plus(MONGO_PASS)
+MONGO_URI = f"mongodb+srv://{MONGO_USER}:{encoded_pass}@{MONGO_CLUSTER}/?appName=Cluster0"
 
 try:
     mongo_client = MongoClient(MONGO_URI)
-    # Atlas üzerindeki isimlerle eşliyoruz:
     db = mongo_client["doktor_paneli"] 
     hastalar_col = db["patients"]
-    # Bağlantı testi
     mongo_client.admin.command('ping')
-    print("✅ MongoDB Atlas Bulut Bağlantısı Başarılı!")
+    print("✅ MongoDB Atlas Bağlantısı Başarılı! (Connected via .env)")
 except Exception as e:
     print(f"❌ MongoDB Bağlantı Hatası: {e}")
 
-ORGAN_MAP = {1: ('Spleen', '#3b82f6'), 2: ('R-Kidney', '#10b981'), 3: ('L-Kidney', '#059669'), 
-             5: ('Liver', '#ef4444'), 6: ('Stomach', '#f97316'), 10: ('Pancreas', '#facc15')}
+ORGAN_MAP = {
+    1: ('Spleen', '#3b82f6'), 2: ('R-Kidney', '#10b981'), 3: ('L-Kidney', '#059669'), 
+    5: ('Liver', '#ef4444'), 6: ('Stomach', '#f97316'), 10: ('Pancreas', '#facc15')
+}
 
-# --- 1. YENİ HASTA YÜKLEME (Atlas'a Kaydeder) ---
+# --- 1. PATIENT UPLOAD ---
 @app.post("/upload-patient")
-async def upload_patient(file: UploadFile = File(...), name: str = Form(...)):
-    temp_path = f"temp_{file.filename}"
-    with open(temp_path, "wb") as buffer: shutil.copyfileobj(file.file, buffer)
+async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(...)):
+    patient_uuid = None
+    upload_count = 0
     try:
-        # A. Orthanc'a Gönder
-        with open(temp_path, "rb") as f:
-            orthanc_res = requests.post(f"{ORTHANC_URL}/instances", data=f.read(), auth=('orthanc', 'orthanc')).json()
-        patient_uuid = orthanc_res['ParentPatient']
+        for file in files:
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                shutil.copyfileobj(file.file, temp_file)
+                temp_path = temp_file.name
+            try:
+                with open(temp_path, "rb") as f:
+                    orthanc_res = requests.post(
+                        f"{ORTHANC_URL}/instances", 
+                        data=f.read(), 
+                        auth=('orthanc', 'orthanc')
+                    ).json()
+                if not patient_uuid:
+                    patient_uuid = orthanc_res['ParentPatient']
+                upload_count += 1
+            finally:
+                if os.path.exists(temp_path): os.remove(temp_path)
 
-        # B. MongoDB Atlas'a Kaydet (Arkadaşınla ortak havuz)
-        hastalar_col.insert_one({
-            "name": name, 
-            "orthanc_id": patient_uuid, 
-            "createdAt": time.strftime("%Y-%m-%d %H:%M:%S")
-        })
-        return {"status": "success", "uuid": patient_uuid}
-    except Exception as e: return {"status": "error", "message": str(e)}
-    finally:
-        if os.path.exists(temp_path): os.remove(temp_path)
+        if not patient_uuid: raise Exception("Orthanc upload failed.")
 
-# --- 2. HASTA LİSTESİNİ GETİR (Atlas'tan Çeker) ---
+        hastalar_col.update_one(
+            {"orthanc_id": patient_uuid},
+            {
+                "$set": {
+                    "name": name, 
+                    "orthanc_id": patient_uuid, 
+                    "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S")
+                },
+                "$setOnInsert": {"createdAt": time.strftime("%Y-%m-%d %H:%M:%S")}
+            },
+            upsert=True
+        )
+        return {"status": "success", "uuid": patient_uuid, "files_uploaded": upload_count}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+# --- 2. GET PATIENTS ---
 @app.get("/patients")
 async def get_patients():
     try:
-        # 1. Direkt MongoDB Atlas'tan tüm hastaları çek
-        # (Orthanc'ta olup olmamasına bakmaksızın listeler)
         docs = list(hastalar_col.find().sort("createdAt", -1))
-        
-        results = []
-        for doc in docs:
-            results.append({
-                "uuid": doc.get("orthanc_id", "yok"), # Orthanc'ta yoksa 'yok' döner
-                "display": doc.get("name") or doc.get("isim") or "İsimsiz Hasta"
-            })
-        
-        print(f"--- Atlas'tan {len(results)} hasta getirildi.")
-        return results
-    except Exception as e:
-        print(f"Liste çekme hatası: {e}")
+        return [{"uuid": d.get("orthanc_id", "yok"), "display": d.get("name") or "İsimsiz"} for d in docs]
+    except:
         return []
 
-# --- 3. AI ANALİZ VE MESH OLUŞTURMA ---
+# --- 3. AI SEGMENTATION ---
 @app.get("/segment/{patient_uuid}")
 async def run_segmentation(patient_uuid: str):
     fd, temp_nii = tempfile.mkstemp(suffix=".nii.gz")
@@ -80,26 +107,28 @@ async def run_segmentation(patient_uuid: str):
         series_id = requests.get(f"{ORTHANC_URL}/studies/{p_info['Studies'][0]}", auth=('orthanc', 'orthanc')).json()['Series'][0]
         dicom_uid = requests.get(f"{ORTHANC_URL}/series/{series_id}", auth=('orthanc', 'orthanc')).json()['MainDicomTags']['SeriesInstanceUID']
 
-        # ROI size VRAM dostu tutuldu
         payload = {"params": {"device": "cuda:0", "sw_batch_size": 1, "roi_size": [64, 64, 64], "overlap": 0.0}}
         res = requests.post(f"{MONAI_URL}/infer/segmentation?image={dicom_uid}", json=payload, timeout=None)
         
+        if res.status_code != 200: raise Exception("AI Service Error")
+
         content = res.content
         gzip_start = content.find(b'\x1f\x8b\x08')
-        if gzip_start == -1: raise Exception("Gecersiz AI Yaniti")
         with open(temp_nii, "wb") as f: f.write(content[gzip_start:])
 
         nifti = nib.load(temp_nii)
         data = nifti.get_fdata()
         zooms = nifti.header.get_zooms()
         all_meshes = []
+        
         for label, (name, color) in ORGAN_MAP.items():
             mask = (data == label).astype(np.uint8)
             if not np.any(mask): continue
+            
             grid = pv.ImageData(dimensions=mask.shape, spacing=zooms)
             grid.point_data["values"] = mask.flatten(order="F")
-            # Yüksek basitleştirme ile akıcı performans
             mesh = grid.contour([0.5]).decimate(0.95) 
+            
             if mesh.n_points > 0:
                 all_meshes.append({
                     "name": name, "color": color,
@@ -107,9 +136,14 @@ async def run_segmentation(patient_uuid: str):
                     "faces": mesh.faces.reshape((-1, 4))[:, 1:4].tolist()
                 })
         return {"meshes": all_meshes}
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
     finally:
         if os.path.exists(temp_nii): os.remove(temp_nii)
+
+@app.post("/reset-vram")
+async def reset_vram():
+    return {"status": "success"}
 
 if __name__ == "__main__":
     import uvicorn
