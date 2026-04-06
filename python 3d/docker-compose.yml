@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  # 1. MONGODB: Hasta kayıtlarının tutulduğu yer (Port: 27017)
+  mongo:
+    image: mongo:latest
+    container_name: mongodb_container
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    restart: unless-stopped
+
+  # 2. ORTHANC: Röntgen/MR dosyalarının (DICOM) saklandığı yer (Port: 8042)
+  orthanc:
+    image: jodogne/orthanc-plugins:latest
+    container_name: orthanc_server
+    ports:
+      - "8042:8042"
+    environment:
+      - DICOM_WEB_ENABLED=true
+      - ORTHANC_AUTHENTICATION_ENABLED=true
+      - ORTHANC_NAME=MyOrthanc
+    restart: unless-stopped
+
+  # 3. MONAI LABEL: Yapay Zeka Analiz Motoru (Port: 8000)
+  monailabel:
+    image: projectmonai/monailabel:latest
+    container_name: monai_label_server
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./apps:/app/apps
+      - ./datasets:/app/datasets
+    command: >
+      bash -c "
+      if [ ! -d /app/apps/radiology ]; then
+        echo 'Radiology app bulunamadı, indiriliyor...';
+        monailabel apps --download --name radiology --output /app/apps;
+      fi;
+      monailabel start_server 
+      --app /app/apps/radiology 
+      --studies http://orthanc:orthanc@orthanc_server:8042/dicom-web 
+      --conf datastore dicomweb 
+      --conf models segmentation 
+      --conf preload false
+      --conf skip_trainers true"
+    depends_on:
+      - orthanc
+    restart: on-failure
+
+volumes:
+  mongo_data:
