@@ -8,14 +8,38 @@
 </head>
 <body class="bg-[#0e1117] text-white overflow-hidden font-sans">
 
-    <div class="flex h-screen">
-        <div class="w-80 bg-[#1f2937] p-6 border-r border-gray-700 flex flex-col shadow-xl">
-            <h2 class="text-xl font-bold mb-6 text-blue-400 flex items-center gap-2">
-                📂 Hasta Yönetimi (Patient Management)
-            </h2>
+    <div id="loginModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4">
+        <div class="w-full max-w-md bg-[#111827] rounded-3xl border border-gray-700 p-8 shadow-2xl">
+            <h1 class="text-3xl font-bold mb-3 text-blue-300">Giriş Yap</h1>
+            <p class="text-sm text-gray-400 mb-6">Doktor veya admin paneline erişmek için kullanıcı adı ve şifre girin.</p>
+            <div class="space-y-4">
+                <input id="loginUsername" type="text" placeholder="Kullanıcı Adı" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-2xl text-sm text-white focus:border-blue-500 outline-none">
+                <input id="loginPassword" type="password" placeholder="Şifre" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-2xl text-sm text-white focus:border-blue-500 outline-none">
+                <button id="loginBtn" onclick="doLogin()" class="w-full bg-blue-600 hover:bg-blue-500 p-3 rounded-2xl text-sm font-bold transition-all active:scale-95">Giriş Yap</button>
+            </div>
+            <p class="text-xs text-gray-500 mt-5">Örnek kullanıcılar: <strong>admin/admin123</strong>, <strong>doktor/doktor123</strong></p>
+        </div>
+    </div>
+
+    <div id="appWrapper" class="hidden">
+        <div class="flex h-screen">
+            <div class="w-80 bg-[#1f2937] p-6 border-r border-gray-700 flex flex-col shadow-xl overflow-y-auto max-h-screen">
+            <div class="flex items-center justify-between mb-6 gap-3">
+                <h2 class="text-xl font-bold text-blue-400 flex items-center gap-2">
+                    📂 Hasta Yönetimi (Patient Management)
+                </h2>
+                <div class="flex items-center gap-2">
+                    <button id="manageDoctorsBtn" onclick="openDoctorManager()" class="hidden text-xs uppercase px-3 py-2 rounded-full border border-cyan-500 text-cyan-200 hover:bg-cyan-500/10 transition">Doktor Yönetimi</button>
+                    <button id="logoutBtn" onclick="logout()" class="text-xs uppercase px-3 py-2 rounded-full border border-slate-600 text-slate-200 hover:bg-slate-700 transition">🚪 Çıkış</button>
+                    <span id="userRoleLabel" class="text-xs uppercase tracking-wide px-3 py-2 rounded-full bg-slate-700 text-slate-200">Giriş Bekleniyor</span>
+                </div>
+            </div>
 
             <div class="mb-8 p-4 bg-gray-800/50 rounded-2xl border border-blue-500/20 shadow-inner">
                 <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider mb-3">➕ Yeni Kayıt & Yükleme (New Record & Upload)</h3>
+                <div id="doctorInfo" class="hidden mb-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+                    Doktor panelinden klasör seçimi yapmanız gerekiyor. Seçebileceğiniz organ: <strong id="allowedOrganName">Karaciğer</strong>.
+                </div>
                 <div class="space-y-3">
                     <input type="text" id="pName" placeholder="Hasta Adı Soyadı" 
                            class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
@@ -68,6 +92,46 @@
         </div>
     </div>
 
+    <div id="doctorManagerModal" class="hidden fixed inset-0 z-50 bg-black/80 p-6 overflow-auto">
+        <div class="max-w-3xl mx-auto bg-[#111827] rounded-3xl border border-gray-700 p-6 shadow-2xl">
+            <div class="flex items-center justify-between mb-5">
+                <div>
+                    <h2 class="text-2xl font-bold text-cyan-300">Doktor Yönetimi</h2>
+                    <p class="text-sm text-gray-400">Buradan doktor hesaplarını yönetin ve her birine izinli organ atayın.</p>
+                </div>
+                <button onclick="closeDoctorManager()" class="text-sm uppercase px-3 py-2 rounded-full border border-gray-600 text-white hover:bg-gray-700 transition">Kapat</button>
+            </div>
+            <div class="space-y-5">
+                <div class="grid gap-4 md:grid-cols-2">
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">Doktor Seç</label>
+                        <select id="doctorUserSelect" onchange="onDoctorChange()" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-2xl text-sm text-white focus:border-cyan-400 outline-none"></select>
+                    </div>
+                    <div>
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">Atanacak Organ</label>
+                        <select id="allowedOrganSelect" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-2xl text-sm text-white focus:border-cyan-400 outline-none">
+                            <option value="Liver">Karaciğer</option>
+                            <option value="Spleen">Dalak</option>
+                            <option value="R-Kidney">Sağ Böbrek</option>
+                            <option value="L-Kidney">Sol Böbrek</option>
+                            <option value="Stomach">Mide</option>
+                            <option value="Pancreas">Pankreas</option>
+                        </select>
+                    </div>
+                </div>
+                <button onclick="saveAllowedOrgan()" id="saveOrganBtn" class="w-full bg-cyan-600 hover:bg-cyan-500 p-3 rounded-2xl text-sm font-bold transition-all active:scale-95">Ayarları Kaydet</button>
+                <div class="border-t border-gray-700 pt-5">
+                    <h4 class="text-lg font-semibold text-white mb-3">Yeni Doktor Hesabı Oluştur</h4>
+                    <div class="grid gap-4 md:grid-cols-2">
+                        <input id="newDoctorUsername" type="text" placeholder="Yeni doktor kullanıcı adı" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-2xl text-sm text-white focus:border-cyan-400 outline-none">
+                        <input id="newDoctorPassword" type="password" placeholder="Şifre" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-2xl text-sm text-white focus:border-cyan-400 outline-none">
+                    </div>
+                    <button onclick="createDoctor()" id="createDoctorBtn" class="mt-4 w-full bg-slate-600 hover:bg-slate-500 p-3 rounded-2xl text-sm font-bold transition-all active:scale-95">Doktor Hesabı Oluştur</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <style>
         .custom-scrollbar::-webkit-scrollbar { width: 4px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
@@ -78,6 +142,234 @@
 
     <script>
         const API = "http://127.0.0.1:8001";
+        const LOGIN_KEY = "ar_arge_access_token";
+        const ROLE_KEY = "ar_arge_role";
+
+        function authHeaders() {
+            const token = localStorage.getItem(LOGIN_KEY);
+            return token ? { "Authorization": `Bearer ${token}` } : {};
+        }
+
+        function showLogin() {
+            document.getElementById('loginModal').classList.remove('hidden');
+            document.getElementById('appWrapper').classList.add('hidden');
+            document.getElementById('manageDoctorsBtn').classList.add('hidden');
+            document.getElementById('logoutBtn').classList.add('hidden');
+            document.getElementById('doctorManagerModal').classList.add('hidden');
+        }
+
+        const organDisplay = {
+            "Liver": "Karaciğer",
+            "Spleen": "Dalak",
+            "R-Kidney": "Sağ Böbrek",
+            "L-Kidney": "Sol Böbrek",
+            "Stomach": "Mide",
+            "Pancreas": "Pankreas"
+        };
+
+        function showApp() {
+            document.getElementById('loginModal').classList.add('hidden');
+            document.getElementById('appWrapper').classList.remove('hidden');
+            document.getElementById('logoutBtn').classList.remove('hidden');
+            const role = localStorage.getItem(ROLE_KEY) || 'doctor';
+            document.getElementById('userRoleLabel').innerText = role === 'admin' ? 'Admin Panel' : 'Doktor Paneli';
+            applyRoleMode();
+        }
+
+        function applyRoleMode() {
+            const role = localStorage.getItem(ROLE_KEY) || 'doctor';
+            const input = document.getElementById('pDicom');
+            const label = document.querySelector("label[for='pDicom']");
+            const doctorInfo = document.getElementById('doctorInfo');
+            const manageDoctorsBtn = document.getElementById('manageDoctorsBtn');
+
+            if (role === 'doctor') {
+                input.setAttribute('webkitdirectory', '');
+                input.setAttribute('directory', '');
+                input.removeAttribute('multiple');
+                label.innerHTML = `<span>📁 DICOM Klasörü Seçin</span><span class="text-[10px] text-gray-400 mt-1">Sadece yöneticinin izin verdiği organ klasörünü seçin.</span>`;
+                doctorInfo.classList.remove('hidden');
+                manageDoctorsBtn.classList.add('hidden');
+            } else {
+                input.removeAttribute('webkitdirectory');
+                input.removeAttribute('directory');
+                input.setAttribute('multiple', '');
+                label.innerHTML = `<span>📁 DICOM Dosyalarını Seç</span><span class="text-[10px] text-gray-400 mt-1">(Birden fazla seçebilirsiniz)</span>`;
+                doctorInfo.classList.add('hidden');
+                manageDoctorsBtn.classList.remove('hidden');
+            }
+        }
+
+        function openDoctorManager() {
+            document.getElementById('doctorManagerModal').classList.remove('hidden');
+            loadSettings();
+        }
+
+        function closeDoctorManager() {
+            document.getElementById('doctorManagerModal').classList.add('hidden');
+        }
+
+        async function loadSettings() {
+            try {
+                const res = await fetch(`${API}/settings`, { headers: authHeaders() });
+                if (!res.ok) return;
+                const data = await res.json();
+                const role = data.role || localStorage.getItem(ROLE_KEY) || 'doctor';
+                if (role === 'admin') {
+                    const doctorSelect = document.getElementById('doctorUserSelect');
+                    if (data.doctors && data.doctors.length > 0) {
+                        doctorSelect.innerHTML = data.doctors.map(d => `
+                            <option value="${d.username}" data-organ="${d.allowed_organ}">${d.username} — ${organDisplay[d.allowed_organ] || d.allowed_organ}</option>
+                        `).join('');
+                        const activeDoctor = data.doctors[0];
+                        document.getElementById('allowedOrganSelect').value = activeDoctor.allowed_organ || 'Liver';
+                        document.getElementById('saveOrganBtn').disabled = false;
+                    } else {
+                        doctorSelect.innerHTML = '<option value="">Önce doktor oluşturun</option>';
+                        document.getElementById('saveOrganBtn').disabled = true;
+                    }
+                } else {
+                    const allowed = data.allowed_organ || 'Liver';
+                    document.getElementById('allowedOrganName').innerText = organDisplay[allowed] || allowed;
+                }
+            } catch (e) {
+                console.warn('Settings yüklenemedi.', e);
+            }
+        }
+
+        function onDoctorChange() {
+            const select = document.getElementById('doctorUserSelect');
+            const organ = select.selectedOptions[0]?.dataset.organ || 'Liver';
+            document.getElementById('allowedOrganSelect').value = organ;
+        }
+
+        async function saveAllowedOrgan() {
+            const btn = document.getElementById('saveOrganBtn');
+            const allowed = document.getElementById('allowedOrganSelect').value;
+            const username = document.getElementById('doctorUserSelect')?.value;
+            btn.disabled = true;
+            btn.innerText = 'Kaydediliyor...';
+
+            try {
+                const res = await fetch(`${API}/settings/allowed-organ`, {
+                    method: 'POST',
+                    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, allowed_organ: allowed })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.detail || data.message || 'Ayar kaydedilemedi.');
+                }
+                alert(`Doktor ${data.username} için ${organDisplay[data.allowed_organ] || data.allowed_organ} seçildi.`);
+                await loadSettings();
+            } catch (e) {
+                alert('Ayar Kaydetme Hatası: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Ayarları Kaydet';
+            }
+        }
+
+        async function createDoctor() {
+            const username = document.getElementById('newDoctorUsername').value.trim();
+            const password = document.getElementById('newDoctorPassword').value.trim();
+            const allowedOrgan = document.getElementById('allowedOrganSelect').value || 'Liver';
+            const btn = document.getElementById('createDoctorBtn');
+            if (!username || !password) {
+                alert('Yeni doktor için kullanıcı adı ve şifre girin.');
+                return;
+            }
+            btn.disabled = true;
+            btn.innerText = 'Oluşturuluyor...';
+            try {
+                const res = await fetch(`${API}/doctors`, {
+                    method: 'POST',
+                    headers: { ...authHeaders(), 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password, allowed_organ: allowedOrgan })
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    throw new Error(data.detail || data.message || JSON.stringify(data));
+                }
+                alert(`Doktor hesabı oluşturuldu: ${data.username}`);
+                document.getElementById('newDoctorUsername').value = '';
+                document.getElementById('newDoctorPassword').value = '';
+                await loadSettings();
+            } catch (e) {
+                console.error('createDoctor error', e);
+                alert('Doktor Oluşturma Hatası: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Doktor Hesabı Oluştur';
+            }
+        }
+
+        async function doLogin() {
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+            const btn = document.getElementById('loginBtn');
+
+            if (!username || !password) {
+                alert('Lütfen kullanıcı adı ve şifrenizi girin.');
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerText = 'Giriş yapılıyor...';
+
+            try {
+                const res = await fetch(`${API}/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    throw new Error(data.detail || data.message || 'Giriş başarısız');
+                }
+
+                localStorage.setItem(LOGIN_KEY, data.access_token);
+                localStorage.setItem(ROLE_KEY, data.role);
+                showApp();
+                await loadSettings();
+                loadPatients();
+            } catch (e) {
+                alert('Giriş Hatası: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Giriş Yap';
+            }
+        }
+
+        async function checkAuth() {
+            const token = localStorage.getItem(LOGIN_KEY);
+            if (!token) {
+                showLogin();
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/me`, { headers: authHeaders() });
+                if (!res.ok) {
+                    showLogin();
+                    return;
+                }
+                const data = await res.json();
+                localStorage.setItem(ROLE_KEY, data.role);
+                showApp();
+                await loadSettings();
+                loadPatients();
+            } catch (e) {
+                showLogin();
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem(LOGIN_KEY);
+            localStorage.removeItem(ROLE_KEY);
+            showLogin();
+        }
 
         async function saveAndUpload() {
             const name = document.getElementById('pName').value;
@@ -105,6 +397,7 @@
             try {
                 const res = await fetch(`${API}/upload-patient`, {
                     method: "POST",
+                    headers: authHeaders(),
                     body: formData
                 });
                 const result = await res.json();
@@ -143,7 +436,7 @@
 
             try {
                 setProgress(20, "DICOM Verileri PACS'tan Alınıyor...");
-                const res = await fetch(`${API}/segment/${uuid}`);
+                const res = await fetch(`${API}/segment/${uuid}`, { headers: authHeaders() });
                 if(!res.ok) throw new Error("GPU/VRAM Hatası oluştu!");
                 
                 setProgress(80, "3D Mesh Verisi Render Ediliyor...");
@@ -183,7 +476,7 @@
             text.innerText = "Sıfırlanıyor...";
 
             try {
-                await fetch(`${API}/reset-vram`, {method: 'POST'});
+                await fetch(`${API}/reset-vram`, {method: 'POST', headers: authHeaders()});
                 alert("VRAM Temizlendi! (VRAM Cleared!)");
                 loadPatients();
             } catch (e) {
@@ -195,7 +488,13 @@
         }
 
         function loadPatients() {
-            fetch(`${API}/patients`).then(r => r.json()).then(data => {
+            fetch(`${API}/patients`, { headers: authHeaders() }).then(r => {
+                if (r.status === 401) {
+                    showLogin();
+                    throw new Error('Yetkilendirme gerekiyor.');
+                }
+                return r.json();
+            }).then(data => {
                 document.getElementById('patientList').innerHTML = data.map(p => `
                     <button onclick="startAnalysis('${p.uuid}', '${p.display}', event)" type="button" 
                             class="w-full text-left p-4 bg-gray-800 rounded-2xl hover:bg-gray-700 border border-gray-700/50 transition-all flex items-center justify-between group">
@@ -206,7 +505,7 @@
             });
         }
 
-        loadPatients();
+        checkAuth();
     </script>
 </body>
 </html>

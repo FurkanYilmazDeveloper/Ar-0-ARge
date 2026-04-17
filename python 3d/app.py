@@ -1,10 +1,19 @@
-import os, time, requests, shutil, tempfile, urllib.parse
+import base64
+import hashlib
+import hmac
+import json
+import os
+import time
+import urllib.parse
+import requests
+import shutil
+import tempfile
 from pathlib import Path  # Dosya yollarını yönetmek için eklendi
 import nibabel as nib, pyvista as pv, numpy as np
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 
 # --- .ENV YÜKLEME (GELİŞTİRİLMİŞ) ---
@@ -32,12 +41,95 @@ if MONGO_PASS is None:
 # URL Encoding for MongoDB Password
 encoded_pass = urllib.parse.quote_plus(MONGO_PASS)
 MONGO_URI = f"mongodb+srv://{MONGO_USER}:{encoded_pass}@{MONGO_CLUSTER}/?appName=Cluster0"
+APP_SECRET = os.getenv("APP_JWT_SECRET") or MONGO_PASS or "change-this-secret"
+TOKEN_EXPIRE_SECONDS = 60 * 60 * 4
+
+
+def hash_password(password: str) -> str:
+    return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def verify_password(password: str, password_hash: str) -> bool:
+    return hmac.compare_digest(hash_password(password), password_hash)
+
+
+def b64url_encode(data: bytes) -> str:
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("utf-8")
+
+
+def b64url_decode(data: str) -> bytes:
+    padding = '=' * (-len(data) % 4)
+    return base64.urlsafe_b64decode(data + padding)
+
+
+def sign_token(payload: dict) -> str:
+    header = {"alg": "HS256", "typ": "JWT"}
+    header_b64 = b64url_encode(json.dumps(header, separators=(",", ":")).encode("utf-8"))
+    payload_b64 = b64url_encode(json.dumps(payload, separators=(",", ":")).encode("utf-8"))
+    signature = hmac.new(APP_SECRET.encode("utf-8"), f"{header_b64}.{payload_b64}".encode("utf-8"), hashlib.sha256).digest()
+    signature_b64 = b64url_encode(signature)
+    return f"{header_b64}.{payload_b64}.{signature_b64}"
+
+
+def verify_token(token: str) -> dict:
+    try:
+        header_b64, payload_b64, signature_b64 = token.split('.')
+        signature_check = hmac.new(APP_SECRET.encode("utf-8"), f"{header_b64}.{payload_b64}".encode("utf-8"), hashlib.sha256).digest()
+        if not hmac.compare_digest(signature_check, b64url_decode(signature_b64)):
+            raise ValueError("Geçersiz token imzası.")
+
+        payload = json.loads(b64url_decode(payload_b64).decode("utf-8"))
+        if payload.get("exp", 0) < int(time.time()):
+            raise ValueError("Token süresi doldu.")
+        return payload
+    except Exception as e:
+        raise ValueError(str(e))
+
+
+def create_access_token(username: str, role: str) -> str:
+    payload = {"username": username, "role": role, "exp": int(time.time()) + TOKEN_EXPIRE_SECONDS}
+    return sign_token(payload)
+
+
+def get_token_from_header(authorization: Optional[str]) -> str:
+    if not authorization:
+        raise HTTPException(status_code=401, detail="Authorization header bulunamadı.")
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(status_code=401, detail="Geçersiz Authorization formatı.")
+    return parts[1]
+
+
+def get_current_user(authorization: Optional[str] = Header(None)) -> dict:
+    token = get_token_from_header(authorization)
+    payload = verify_token(token)
+    username = payload.get("username")
+    role = payload.get("role")
+    if not username or not role:
+        raise HTTPException(status_code=401, detail="Geçersiz kullanıcı bilgisi.")
+    return {"username": username, "role": role}
+
+
+def create_default_users(users_collection):
+    try:
+        users_collection.create_index("username", unique=True)
+    except Exception:
+        pass
+
+    if users_collection.count_documents({}) == 0:
+        users_collection.insert_many([
+            {"username": "admin", "password_hash": hash_password("admin123"), "role": "admin"},
+            {"username": "doktor", "password_hash": hash_password("doktor123"), "role": "doctor", "allowed_organ": "Liver"}
+        ])
+        print("✅ Varsayılan kullanıcılar oluşturuldu: admin/admin123, doktor/doktor123")
 
 try:
     mongo_client = MongoClient(MONGO_URI)
-    db = mongo_client["doktor_paneli"] 
+    db = mongo_client["doktor_paneli"]
     hastalar_col = db["patients"]
+    users_col = db["users"]
     mongo_client.admin.command('ping')
+    create_default_users(users_col)
     print("✅ MongoDB Atlas Bağlantısı Başarılı! (Connected via .env)")
 except Exception as e:
     print(f"❌ MongoDB Bağlantı Hatası: {e}")
@@ -47,9 +139,82 @@ ORGAN_MAP = {
     5: ('Liver', '#ef4444'), 6: ('Stomach', '#f97316'), 10: ('Pancreas', '#facc15')
 }
 
+@app.post("/login")
+async def login(credentials: dict):
+    username = credentials.get("username")
+    password = credentials.get("password")
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="Kullanıcı adı ve şifre gereklidir.")
+
+    user = users_col.find_one({"username": username})
+    if not user or not verify_password(password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Kullanıcı adı veya şifre yanlış.")
+
+    access_token = create_access_token(username=username, role=user.get("role", "doctor"))
+    return {"access_token": access_token, "token_type": "bearer", "role": user.get("role", "doctor"), "username": username}
+
+
+def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Yalnızca admin erişebilir.")
+    return current_user
+
+
+def get_user(username: str) -> dict:
+    return users_col.find_one({"username": username}) or {}
+
+
+@app.get("/settings")
+async def get_settings(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") == "admin":
+        docs = list(users_col.find({"role": "doctor"}, {"_id": 0, "username": 1, "allowed_organ": 1}))
+        return {"role": "admin", "doctors": docs}
+
+    user = get_user(current_user["username"])
+    return {"role": "doctor", "allowed_organ": user.get("allowed_organ", "Liver"), "username": current_user["username"]}
+
+
+@app.post("/settings/allowed-organ")
+async def update_allowed_organ(data: dict, current_user: dict = Depends(require_admin)):
+    target_username = data.get("username")
+    allowed_organ = data.get("allowed_organ")
+    if not target_username or not allowed_organ:
+        raise HTTPException(status_code=400, detail="username ve allowed_organ gerekli.")
+
+    user = get_user(target_username)
+    if not user or user.get("role") != "doctor":
+        raise HTTPException(status_code=404, detail="Doktor bulunamadı.")
+
+    users_col.update_one(
+        {"username": target_username},
+        {"$set": {"allowed_organ": allowed_organ}}
+    )
+    return {"status": "success", "username": target_username, "allowed_organ": allowed_organ}
+
+
+@app.post("/doctors")
+async def create_doctor(data: dict, current_user: dict = Depends(require_admin)):
+    username = data.get("username")
+    password = data.get("password")
+    allowed_organ = data.get("allowed_organ", "Liver")
+    if not username or not password:
+        raise HTTPException(status_code=400, detail="username ve password gerekli.")
+
+    if users_col.find_one({"username": username}):
+        raise HTTPException(status_code=409, detail="Bu kullanıcı adı zaten var.")
+
+    users_col.insert_one({
+        "username": username,
+        "password_hash": hash_password(password),
+        "role": "doctor",
+        "allowed_organ": allowed_organ
+    })
+    return {"status": "success", "username": username, "allowed_organ": allowed_organ}
+
+
 # --- 1. PATIENT UPLOAD ---
 @app.post("/upload-patient")
-async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(...)):
+async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(...), current_user: dict = Depends(get_current_user)):
     patient_uuid = None
     upload_count = 0
     try:
@@ -90,7 +255,7 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
 
 # --- 2. GET PATIENTS ---
 @app.get("/patients")
-async def get_patients():
+async def get_patients(current_user: dict = Depends(get_current_user)):
     try:
         docs = list(hastalar_col.find().sort("createdAt", -1))
         return [{"uuid": d.get("orthanc_id", "yok"), "display": d.get("name") or "İsimsiz"} for d in docs]
@@ -99,7 +264,7 @@ async def get_patients():
 
 # --- 3. AI SEGMENTATION ---
 @app.get("/segment/{patient_uuid}")
-async def run_segmentation(patient_uuid: str):
+async def run_segmentation(patient_uuid: str, current_user: dict = Depends(get_current_user)):
     fd, temp_nii = tempfile.mkstemp(suffix=".nii.gz")
     os.close(fd)
     try:
@@ -142,7 +307,7 @@ async def run_segmentation(patient_uuid: str):
         if os.path.exists(temp_nii): os.remove(temp_nii)
 
 @app.post("/reset-vram")
-async def reset_vram():
+async def reset_vram(current_user: dict = Depends(get_current_user)):
     return {"status": "success"}
 
 if __name__ == "__main__":
