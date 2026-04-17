@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 import base64
 import hashlib
 import hmac
@@ -9,9 +8,6 @@ import urllib.parse
 import requests
 import shutil
 import tempfile
-=======
-import os, time, requests, shutil, tempfile, urllib.parse, subprocess
->>>>>>> ba4474f295f8d0a71d5570fe80224241b671cee9
 from pathlib import Path  # Dosya yollarını yönetmek için eklendi
 import nibabel as nib, pyvista as pv, numpy as np
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File, Form
@@ -375,19 +371,8 @@ async def run_segmentation(patient_uuid: str, current_user: dict = Depends(get_c
         if os.path.exists(temp_nii): os.remove(temp_nii)
 
 @app.post("/reset-vram")
-<<<<<<< HEAD
 async def reset_vram(current_user: dict = Depends(get_current_user)):
     return {"status": "success"}
-=======
-async def reset_vram():
-    try:
-        subprocess.run(["docker", "restart", "monai_label_server"], check=True)
-        # Sadece 3 saniye bekleyip başarı döndürüyoruz, uzun süre beklemek 500 hatasına neden oluyor.
-        time.sleep(3)
-        return {"status": "ready", "message": "VRAM sıfırlama tetiklendi"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
->>>>>>> ba4474f295f8d0a71d5570fe80224241b671cee9
 
 if __name__ == "__main__":
     import uvicorn
