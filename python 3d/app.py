@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import base64
 import hashlib
 import hmac
@@ -8,6 +9,9 @@ import urllib.parse
 import requests
 import shutil
 import tempfile
+=======
+import os, time, requests, shutil, tempfile, urllib.parse, subprocess
+>>>>>>> ba4474f295f8d0a71d5570fe80224241b671cee9
 from pathlib import Path  # Dosya yollarını yönetmek için eklendi
 import nibabel as nib, pyvista as pv, numpy as np
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File, Form
@@ -37,6 +41,14 @@ if MONGO_PASS is None:
     print(f"Aranan dosya yolu: {env_path.absolute()}")
     print("Lütfen .env dosyasının 'python 3d' klasörü içinde olduğundan emin olun.")
     exit(1) # Uygulamayı durdur
+
+def check_monai_ready():
+    """Check if MONAI Label service is ready."""
+    try:
+        res = requests.get(f"{MONAI_URL}/health", timeout=5)
+        return res.status_code == 200
+    except Exception:
+        return False
 
 # URL Encoding for MongoDB Password
 encoded_pass = urllib.parse.quote_plus(MONGO_PASS)
@@ -135,8 +147,31 @@ except Exception as e:
     print(f"❌ MongoDB Bağlantı Hatası: {e}")
 
 ORGAN_MAP = {
-    1: ('Spleen', '#3b82f6'), 2: ('R-Kidney', '#10b981'), 3: ('L-Kidney', '#059669'), 
-    5: ('Liver', '#ef4444'), 6: ('Stomach', '#f97316'), 10: ('Pancreas', '#facc15')
+    1: ('Spleen', '#3b82f6'),
+    2: ('R-Kidney', '#10b981'),
+    3: ('L-Kidney', '#059669'),
+    4: ('Gallbladder', '#84cc16'),
+    5: ('Liver', '#ef4444'),
+    6: ('Stomach', '#f97316'),
+    7: ('Aorta', '#dc2626'),
+    8: ('IVC', '#7c3aed'),
+    9: ('Portal Vein', '#2563eb'),
+    10: ('Pancreas', '#facc15'),
+    11: ('R-Adrenal', '#a855f7'),
+    12: ('L-Adrenal', '#9333ea'),
+    13: ('Lung LUL', '#60a5fa'),
+    14: ('Lung LLL', '#1d4ed8'),
+    15: ('Lung RUL', '#86efac'),
+    16: ('Lung RML', '#34d399'),
+    17: ('Lung RLL', '#065f46'),
+    42: ('Esophagus', '#f472b6'),
+    43: ('Trachea', '#e879f9'),
+    44: ('Myocardium', '#b91c1c'),
+    45: ('LA', '#fb7185'),
+    46: ('LV', '#ef4444'),
+    47: ('RA', '#fca5a5'),
+    48: ('RV', '#fecaca'),
+    49: ('Pulmonary Artery', '#0ea5e9')
 }
 
 @app.post("/login")
@@ -258,9 +293,42 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
 async def get_patients(current_user: dict = Depends(get_current_user)):
     try:
         docs = list(hastalar_col.find().sort("createdAt", -1))
-        return [{"uuid": d.get("orthanc_id", "yok"), "display": d.get("name") or "İsimsiz"} for d in docs]
-    except:
+        # orthanc_id yoksa _id değerini string olarak gönder
+        return [{"uuid": d.get("orthanc_id") or str(d.get("_id")), "display": d.get("name") or "İsimsiz"} for d in docs]
+    except Exception as e:
+        print(f"Error fetching patients: {e}")
         return []
+
+# --- DELETE PATIENT ---
+@app.delete("/patient/{patient_uuid}")
+async def delete_patient(patient_uuid: str):
+    from bson import ObjectId
+    try:
+        # 1. MONGODB'den Sil
+        res = hastalar_col.delete_one({"orthanc_id": patient_uuid})
+        
+        # Eğer orthanc_id ile bulunamadıysa, belki bu UUID aslında MongoDB'nin _id'sidir.
+        if res.deleted_count == 0:
+            if len(patient_uuid) == 24: # Valid ObjectId length
+                res = hastalar_col.delete_one({"_id": ObjectId(patient_uuid)})
+
+        if res.deleted_count == 0:
+             raise HTTPException(status_code=404, detail="Hasta MongoDB'de bulunamadı (UUID veya ID eşleşmedi).")
+             
+        # 2. ORTHANC'tan Sil (DICOM görüntülerini silmek için) - sadece orthanc_id geçerliyse deneriz
+        if len(patient_uuid) != 24:
+            try:
+                requests.delete(f"{ORTHANC_URL}/patients/{patient_uuid}", auth=('orthanc', 'orthanc'), timeout=3)
+            except Exception as e:
+                print(f"Orthanc silme hatası (göz ardı ediliyor): {e}")
+                pass
+            
+        return {"status": "success", "message": "Hasta başarıyla silindi"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Delete Error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- 3. AI SEGMENTATION ---
 @app.get("/segment/{patient_uuid}")
@@ -272,7 +340,7 @@ async def run_segmentation(patient_uuid: str, current_user: dict = Depends(get_c
         series_id = requests.get(f"{ORTHANC_URL}/studies/{p_info['Studies'][0]}", auth=('orthanc', 'orthanc')).json()['Series'][0]
         dicom_uid = requests.get(f"{ORTHANC_URL}/series/{series_id}", auth=('orthanc', 'orthanc')).json()['MainDicomTags']['SeriesInstanceUID']
 
-        payload = {"params": {"device": "cuda:0", "sw_batch_size": 1, "roi_size": [64, 64, 64], "overlap": 0.0}}
+        payload = {"params": {"device": "cuda:0", "sw_batch_size": 1, "roi_size": [128, 128, 128], "overlap": 0.50}}
         res = requests.post(f"{MONAI_URL}/infer/segmentation?image={dicom_uid}", json=payload, timeout=None)
         
         if res.status_code != 200: raise Exception("AI Service Error")
@@ -292,7 +360,7 @@ async def run_segmentation(patient_uuid: str, current_user: dict = Depends(get_c
             
             grid = pv.ImageData(dimensions=mask.shape, spacing=zooms)
             grid.point_data["values"] = mask.flatten(order="F")
-            mesh = grid.contour([0.5]).decimate(0.95) 
+            mesh = grid.contour([0.5]).decimate(0.95).smooth_taubin(n_iter=20) 
             
             if mesh.n_points > 0:
                 all_meshes.append({
@@ -307,8 +375,19 @@ async def run_segmentation(patient_uuid: str, current_user: dict = Depends(get_c
         if os.path.exists(temp_nii): os.remove(temp_nii)
 
 @app.post("/reset-vram")
+<<<<<<< HEAD
 async def reset_vram(current_user: dict = Depends(get_current_user)):
     return {"status": "success"}
+=======
+async def reset_vram():
+    try:
+        subprocess.run(["docker", "restart", "monai_label_server"], check=True)
+        # Sadece 3 saniye bekleyip başarı döndürüyoruz, uzun süre beklemek 500 hatasına neden oluyor.
+        time.sleep(3)
+        return {"status": "ready", "message": "VRAM sıfırlama tetiklendi"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+>>>>>>> ba4474f295f8d0a71d5570fe80224241b671cee9
 
 if __name__ == "__main__":
     import uvicorn
