@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # 1. MONGODB: Hasta kayıtlarının tutulduğu yer (Port: 27017)
   mongo:

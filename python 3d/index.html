@@ -1,79 +1,107 @@
 <!DOCTYPE html>
 <html lang="tr">
+
 <head>
     <meta charset="UTF-8">
     <title>AI Organ Analizi | Hasta Yönetim Sistemi</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
+
 <body class="bg-[#0e1117] text-white overflow-hidden font-sans">
 
     <div class="flex h-screen">
-        <div class="w-80 bg-[#1f2937] p-6 border-r border-gray-700 flex flex-col shadow-xl">
-            <h2 class="text-xl font-bold mb-6 text-blue-400 flex items-center gap-2">
+        <div class="w-80 lg:w-85 bg-[#1f2937] p-4 lg:p-5 border-r border-gray-700 flex flex-col shadow-xl">
+            <h2 class="text-xl font-bold mb-4 text-blue-400 flex items-center gap-2">
                 📂 Hasta Yönetimi (Patient Management)
             </h2>
 
             <div class="mb-8 p-4 bg-gray-800/50 rounded-2xl border border-blue-500/20 shadow-inner">
-                <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider mb-3">➕ Yeni Kayıt & Yükleme (New Record & Upload)</h3>
+                <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider mb-3">➕ Yeni Kayıt & Yükleme (New
+                    Record & Upload)</h3>
                 <div class="space-y-3">
-                    <input type="text" id="pName" placeholder="Hasta Adı Soyadı" 
-                           class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
-                    
+                    <input type="text" id="pName" placeholder="Hasta Adı Soyadı"
+                        class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
+
                     <div class="relative group">
                         <input type="file" id="pDicom" accept=".dcm,.dicom" class="hidden" multiple>
-                        <label for="pDicom" class="flex flex-col items-center justify-center w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-xl cursor-pointer text-xs border border-dashed border-gray-500 transition-all">
+                        <label for="pDicom"
+                            class="flex flex-col items-center justify-center w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-xl cursor-pointer text-xs border border-dashed border-gray-500 transition-all">
                             <span>📁 DICOM Dosyalarını Seç</span>
                             <span class="text-[10px] text-gray-400 mt-1">(Birden fazla seçebilirsiniz)</span>
                         </label>
                     </div>
 
                     <button onclick="saveAndUpload()" id="uploadBtn"
-                            class="w-full bg-blue-600 hover:bg-blue-500 p-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95">
+                        class="w-full bg-blue-600 hover:bg-blue-500 p-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95">
                         Sisteme Kaydet (Save to System)
                     </button>
                 </div>
             </div>
 
-            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1 text-center">📋 Kayıtlı Hastalar (Registered Patients)</h3>
+            <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1 text-center">📋 Kayıtlı
+                Hastalar (Registered Patients)</h3>
             <div id="patientList" class="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                 <div class="text-center text-gray-500 text-sm py-10 italic">Yükleniyor...</div>
             </div>
 
-            <button id="resetBtn" onclick="resetVRAM(event)" 
-                    class="mt-6 w-full bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white p-4 rounded-xl border border-red-600/30 flex items-center justify-center gap-2 font-bold transition-all group">
-                <span id="resetIcon" class="group-hover:rotate-180 transition-transform duration-500">♻️</span> 
+            <button id="resetBtn" onclick="resetVRAM(event)"
+                class="mt-6 w-full bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white p-4 rounded-xl border border-red-600/30 flex items-center justify-center gap-2 font-bold transition-all group">
+                <span id="resetIcon" class="group-hover:rotate-180 transition-transform duration-500">♻️</span>
                 <span id="resetText">VRAM Sıfırla (Reset VRAM)</span>
             </button>
         </div>
 
         <div class="flex-1 p-8 flex flex-col relative bg-[#0e1117]">
-            <div id="progressArea" class="hidden mb-6 bg-gray-800/80 backdrop-blur-md p-5 rounded-2xl border border-blue-500/30 shadow-lg animate-pulse">
+            <div id="progressArea"
+                class="hidden mb-6 bg-gray-800/80 backdrop-blur-md p-5 rounded-2xl border border-blue-500/30 shadow-lg animate-pulse">
                 <div class="flex justify-between mb-3">
                     <span id="stepText" class="text-blue-300 font-bold tracking-tight">AI İşleniyor...</span>
                     <span id="percentText" class="font-mono bg-blue-900/50 px-2 py-0.5 rounded text-blue-200">0%</span>
                 </div>
                 <div class="w-full bg-gray-900 rounded-full h-2.5 overflow-hidden">
-                    <div id="progressBar" class="bg-gradient-to-r from-blue-600 to-cyan-400 h-full rounded-full transition-all duration-700 w-0 shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
+                    <div id="progressBar"
+                        class="bg-gradient-to-r from-blue-600 to-cyan-400 h-full rounded-full transition-all duration-700 w-0 shadow-[0_0_10px_rgba(37,99,235,0.5)]">
+                    </div>
                 </div>
             </div>
 
-            <div id="canvasBox" class="flex-1 bg-[#161b22] rounded-[2rem] border border-gray-800 relative shadow-2xl overflow-hidden group">
+            <div id="canvasBox"
+                class="flex-1 bg-[#161b22] rounded-[2rem] border border-gray-800 relative shadow-2xl overflow-hidden group">
                 <div id="myPlot" class="w-full h-full opacity-0 transition-opacity duration-1000"></div>
-                <div id="emptyMsg" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 pointer-events-none transition-all duration-500">
+                <div id="emptyMsg"
+                    class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 pointer-events-none transition-all duration-500">
                     <div class="text-6xl mb-4 opacity-20">🧬</div>
-                    <p class="text-xl font-light tracking-wide italic">Analiz için soldan hasta seçin veya yeni kayıt ekleyin...</p>
+                    <p class="text-xl font-light tracking-wide italic">Analiz için soldan hasta seçin veya yeni kayıt
+                        ekleyin...</p>
                 </div>
             </div>
         </div>
     </div>
 
     <style>
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #374151; border-radius: 10px; }
-        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #4b5563; }
-        .patient-btn-active { border-color: #2563eb !important; background: #1e3a8a !important; box-shadow: 0 0 15px rgba(37,99,235,0.2); }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #374151;
+            border-radius: 10px;
+        }
+
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
+        }
+
+        .patient-btn-active {
+            border-color: #2563eb !important;
+            background: #1e3a8a !important;
+            box-shadow: 0 0 15px rgba(37, 99, 235, 0.2);
+        }
     </style>
 
     <script>
@@ -92,7 +120,7 @@
 
             const formData = new FormData();
             formData.append("name", name);
-            
+
             // Loop through selected files / Seçilen tüm dosyaları ekle
             for (let i = 0; i < fileInput.files.length; i++) {
                 formData.append("files", fileInput.files[i]);
@@ -135,17 +163,17 @@
         }
 
         async function startAnalysis(uuid, name, event) {
-            if(event) event.preventDefault();
+            if (event) event.preventDefault();
             document.querySelectorAll('#patientList button').forEach(b => b.classList.remove('patient-btn-active'));
-            if(event) event.currentTarget.classList.add('patient-btn-active');
+            if (event) event.currentTarget.classList.add('patient-btn-active');
             document.getElementById('emptyMsg').style.opacity = "0";
             document.getElementById('myPlot').style.opacity = "0";
 
             try {
                 setProgress(20, "DICOM Verileri PACS'tan Alınıyor...");
                 const res = await fetch(`${API}/segment/${uuid}`);
-                if(!res.ok) throw new Error("GPU/VRAM Hatası oluştu!");
-                
+                if (!res.ok) throw new Error("GPU/VRAM Hatası oluştu!");
+
                 setProgress(80, "3D Mesh Verisi Render Ediliyor...");
                 const data = await res.json();
 
@@ -154,16 +182,16 @@
                     x: m.vertices.map(v => v[0]), y: m.vertices.map(v => v[1]), z: m.vertices.map(v => v[2]),
                     i: m.faces.map(f => f[0]), j: m.faces.map(f => f[1]), k: m.faces.map(f => f[2]),
                     color: m.color, opacity: 0.8, name: m.name, showlegend: true,
-                    flatshading: false, lighting: {ambient: 0.4, diffuse: 0.8, specular: 0.1}
+                    flatshading: false, lighting: { ambient: 0.4, diffuse: 0.8, specular: 0.1 }
                 }));
 
                 const layout = {
-                    scene: { xaxis: {visible: false}, yaxis: {visible: false}, zaxis: {visible: false}, aspectmode: 'data' },
-                    margin: {l:0, r:0, b:0, t:0}, paper_bgcolor: 'rgba(0,0,0,0)',
-                    legend: { font: {color: 'white', size: 10}, x: 0.02, y: 0.98, bgcolor: 'rgba(0,0,0,0.5)' }
+                    scene: { xaxis: { visible: false }, yaxis: { visible: false }, zaxis: { visible: false }, aspectmode: 'data' },
+                    margin: { l: 0, r: 0, b: 0, t: 0 }, paper_bgcolor: 'rgba(0,0,0,0)',
+                    legend: { font: { color: 'white', size: 10 }, x: 0.02, y: 0.98, bgcolor: 'rgba(0,0,0,0.5)' }
                 };
 
-                await Plotly.newPlot('myPlot', traces, layout, {responsive: true, displayModeBar: false});
+                await Plotly.newPlot('myPlot', traces, layout, { responsive: true, displayModeBar: false });
                 document.getElementById('myPlot').style.opacity = "1";
                 setProgress(100, "Analiz Tamamlandı!");
                 setTimeout(() => document.getElementById('progressArea').classList.add('hidden'), 3000);
@@ -178,30 +206,67 @@
         async function resetVRAM(event) {
             event.preventDefault();
             const btn = document.getElementById('resetBtn');
+            const icon = document.getElementById('resetIcon');
             const text = document.getElementById('resetText');
+
             btn.disabled = true;
+            icon.classList.add('animate-spin');
             text.innerText = "Sıfırlanıyor...";
 
             try {
-                await fetch(`${API}/reset-vram`, {method: 'POST'});
+                await fetch(`${API}/reset-vram`, { method: 'POST' });
                 alert("VRAM Temizlendi! (VRAM Cleared!)");
                 loadPatients();
             } catch (e) {
                 alert("Bağlantı hatası. (Connection error.)");
             } finally {
                 btn.disabled = false;
+                icon.classList.remove('animate-spin');
                 text.innerText = "VRAM Sıfırla";
+            }
+        }
+
+        async function deletePatient(uuid, event) {
+            // Prevent event from bubbling up to parents (which prevents selecting patient)
+            if (event) event.stopPropagation();
+
+            if (!confirm("Bu hastayı veritabanından kalıcı olarak silmek istediğinize emin misiniz? (Are you sure you want to delete this patient permanently?)")) {
+                return;
+            }
+
+            try {
+                const res = await fetch(`${API}/patient/${uuid}`, { method: 'DELETE' });
+                if (res.ok) {
+                    alert("Hasta başarıyla silindi. (Patient deleted successfully.)");
+                    // Eğer silinen hasta aktif olarak seçiliyse ekranı temizle
+                    document.getElementById('emptyMsg').style.opacity = "1";
+                    document.getElementById('myPlot').style.opacity = "0";
+
+                    loadPatients();
+                } else {
+                    const errInfo = await res.json();
+                    alert("Silme hatası (Error): " + errInfo.detail);
+                }
+            } catch (e) {
+                alert("Bağlantı hatası (Connection error): " + e.message);
             }
         }
 
         function loadPatients() {
             fetch(`${API}/patients`).then(r => r.json()).then(data => {
                 document.getElementById('patientList').innerHTML = data.map(p => `
-                    <button onclick="startAnalysis('${p.uuid}', '${p.display}', event)" type="button" 
-                            class="w-full text-left p-4 bg-gray-800 rounded-2xl hover:bg-gray-700 border border-gray-700/50 transition-all flex items-center justify-between group">
-                        <span class="truncate pr-2">👤 ${p.display}</span>
-                        <span class="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">ANALİZ ET</span>
-                    </button>
+                    <div class="flex gap-1 mb-2 w-full">
+                        <button onclick="startAnalysis('${p.uuid}', '${p.display}', event)" type="button" 
+                                class="flex-1 text-left px-3 py-3 bg-gray-800 rounded-xl hover:bg-gray-700 border border-gray-700/50 transition-all flex items-center justify-between group overflow-hidden" title="${p.display}">
+                            <span class="truncate pr-1 text-sm font-medium">👤 ${p.display}</span>
+                            <span class="text-[9px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap font-bold">ANALİZ ET</span>
+                        </button>
+                        <button onclick="deletePatient('${p.uuid}', event)" type="button" 
+                            class="px-3 py-3 bg-red-900/10 hover:bg-red-600 flex-shrink-0 rounded-xl border border-red-500/20 transition-all text-red-500 hover:text-white flex items-center justify-center text-sm" 
+                            title="Hastayı Sil">
+                            🗑️
+                        </button>
+                    </div>
                 `).join('') || '<p class="text-gray-600 text-center text-xs mt-10 italic">Hasta bulunamadı.</p>';
             });
         }
@@ -209,4 +274,5 @@
         loadPatients();
     </script>
 </body>
+
 </html>
