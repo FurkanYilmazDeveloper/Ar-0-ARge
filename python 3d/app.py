@@ -184,6 +184,15 @@ async def login(credentials: dict):
     access_token = create_access_token(username=username, role=user.get("role", "doctor"))
     return {"access_token": access_token, "token_type": "bearer", "role": user.get("role", "doctor"), "username": username}
 
+@app.get("/me")
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    user = get_user(current_user["username"])
+    return {
+        "username": current_user["username"],
+        "role": current_user["role"],
+        "allowed_organ": user.get("allowed_organ")
+    }
+
 
 def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user.get("role") != "admin":
@@ -248,6 +257,14 @@ async def create_doctor(data: dict, current_user: dict = Depends(require_admin))
 async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(...), current_user: dict = Depends(get_current_user)):
     patient_uuid = None
     upload_count = 0
+    uploader = current_user.get("username")
+    allowed_organ = None
+    if current_user.get("role") == "doctor":
+        user = get_user(uploader)
+        allowed_organ = user.get("allowed_organ")
+        if not allowed_organ:
+            raise HTTPException(status_code=403, detail="Lütfen önce bir organ atanmış bir doktor hesabıyla giriş yapın.")
+
     try:
         for file in files:
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
@@ -257,7 +274,7 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
                 with open(temp_path, "rb") as f:
                     orthanc_res = requests.post(
                         f"{ORTHANC_URL}/instances", 
-                        data=f.read(), 
+                        data=f.read(),
                         auth=('orthanc', 'orthanc')
                     ).json()
                 if not patient_uuid:
@@ -266,16 +283,22 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
             finally:
                 if os.path.exists(temp_path): os.remove(temp_path)
 
-        if not patient_uuid: raise Exception("Orthanc upload failed.")
+        if not patient_uuid:
+            raise Exception("Orthanc upload failed.")
+
+        update_data = {
+            "name": name,
+            "orthanc_id": patient_uuid,
+            "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "uploader": uploader
+        }
+        if allowed_organ:
+            update_data["allowed_organ"] = allowed_organ
 
         hastalar_col.update_one(
             {"orthanc_id": patient_uuid},
             {
-                "$set": {
-                    "name": name, 
-                    "orthanc_id": patient_uuid, 
-                    "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S")
-                },
+                "$set": update_data,
                 "$setOnInsert": {"createdAt": time.strftime("%Y-%m-%d %H:%M:%S")}
             },
             upsert=True
@@ -288,9 +311,17 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
 @app.get("/patients")
 async def get_patients(current_user: dict = Depends(get_current_user)):
     try:
-        docs = list(hastalar_col.find().sort("createdAt", -1))
-        # orthanc_id yoksa _id değerini string olarak gönder
+        query = {}
+        if current_user.get("role") == "doctor":
+            user = get_user(current_user["username"])
+            allowed_organ = user.get("allowed_organ")
+            query = {"$or": [{"uploader": current_user["username"]}]}
+            if allowed_organ:
+                query["$or"].append({"allowed_organ": allowed_organ})
+        docs = list(hastalar_col.find(query).sort("createdAt", -1))
         return [{"uuid": d.get("orthanc_id") or str(d.get("_id")), "display": d.get("name") or "İsimsiz"} for d in docs]
+    except HTTPException:
+        raise
     except Exception as e:
         print(f"Error fetching patients: {e}")
         return []
@@ -329,6 +360,15 @@ async def delete_patient(patient_uuid: str):
 # --- 3. AI SEGMENTATION ---
 @app.get("/segment/{patient_uuid}")
 async def run_segmentation(patient_uuid: str, current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") == "doctor":
+        patient_doc = hastalar_col.find_one({"orthanc_id": patient_uuid})
+        if not patient_doc:
+            raise HTTPException(status_code=404, detail="Hasta bulunamadı.")
+        user = get_user(current_user["username"])
+        allowed_organ = user.get("allowed_organ")
+        if not allowed_organ or (patient_doc.get("uploader") != current_user["username"] and patient_doc.get("allowed_organ") != allowed_organ):
+            raise HTTPException(status_code=403, detail="Bu hastanın görüntülenmesine izin verilmez.")
+
     fd, temp_nii = tempfile.mkstemp(suffix=".nii.gz")
     os.close(fd)
     try:

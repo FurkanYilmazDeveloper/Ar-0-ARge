@@ -25,7 +25,7 @@
 
     <div id="appWrapper" class="hidden">
         <div class="flex h-screen">
-            <div class="w-80 bg-[#1f2937] p-6 border-r border-gray-700 flex flex-col shadow-xl overflow-y-auto max-h-screen">
+            <div class="w-80 bg-[#1f2937] p-6 border-r border-gray-700 flex flex-col shadow-xl overflow-hidden max-h-screen">
                 <div class="flex items-center justify-between mb-6 gap-2">
                     <h2 class="text-xl font-bold text-blue-400 flex items-center gap-2">
                         📁 Hasta Yönetimi (Patient Management)
@@ -46,10 +46,10 @@
                         <input type="text" id="pName" placeholder="Hasta Adı Soyadı" class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
 
                         <div class="relative group">
-                            <input type="file" id="pDicom" accept=".dcm,.dicom" class="hidden" multiple>
+                            <input type="file" id="pDicom" accept=".dcm,.dicom" class="hidden" webkitdirectory directory>
                             <label for="pDicom" class="flex flex-col items-center justify-center w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-xl cursor-pointer text-xs border border-dashed border-gray-500 transition-all">
-                                <span>📁 DICOM Dosyalarını Seç</span>
-                                <span class="text-[10px] text-gray-400 mt-1">(Birden fazla seçebilirsiniz)</span>
+                                <span>📁 DICOM Klasörünü Seç</span>
+                                <span class="text-[10px] text-gray-400 mt-1">Klasör seçeneğiyle birden fazla DICOM dosyasını yükleyin.</span>
                             </label>
                         </div>
 
@@ -59,7 +59,10 @@
                     </div>
                 </div>
 
-                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 px-1 text-center">📋 Kayıtlı Hastalar (Registered Patients)</h3>
+                <div class="flex items-center justify-between mb-3 px-1">
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">📋 Kayıtlı Hastalar (Registered Patients)</h3>
+                    <span id="patientCount" class="text-[11px] text-slate-400">Yükleniyor...</span>
+                </div>
                 <div id="patientList" class="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
                     <div class="text-center text-gray-500 text-sm py-10 italic">Yükleniyor...</div>
                 </div>
@@ -200,18 +203,14 @@
             const doctorInfo = document.getElementById('doctorInfo');
             const manageDoctorsBtn = document.getElementById('manageDoctorsBtn');
 
+            input.setAttribute('webkitdirectory', '');
+            input.setAttribute('directory', '');
+            input.removeAttribute('multiple');
+            label.innerHTML = `<span>📁 DICOM Klasörü Seçin</span><span class="text-[10px] text-gray-400 mt-1">Klasör seçeneğiyle birden fazla DICOM dosyasını yükleyin.</span>`;
             if (role === 'doctor') {
-                input.setAttribute('webkitdirectory', '');
-                input.setAttribute('directory', '');
-                input.removeAttribute('multiple');
-                label.innerHTML = `<span>📁 DICOM Klasörü Seçin</span><span class="text-[10px] text-gray-400 mt-1">Sadece yöneticinin izin verdiği organ klasörünü seçin.</span>`;
                 doctorInfo.classList.remove('hidden');
                 manageDoctorsBtn.classList.add('hidden');
             } else {
-                input.removeAttribute('webkitdirectory');
-                input.removeAttribute('directory');
-                input.setAttribute('multiple', '');
-                label.innerHTML = `<span>📁 DICOM Dosyalarını Seç</span><span class="text-[10px] text-gray-400 mt-1">(Birden fazla seçebilirsiniz)</span>`;
                 doctorInfo.classList.add('hidden');
                 manageDoctorsBtn.classList.remove('hidden');
             }
@@ -508,13 +507,23 @@
                 }
                 return r.json();
             }).then(data => {
-                document.getElementById('patientList').innerHTML = data.map(p => `
+                const countLabel = document.getElementById('patientCount');
+                if (Array.isArray(data)) {
+                    countLabel.innerText = `${data.length} hasta bulundu`;
+                } else {
+                    countLabel.innerText = 'Hasta listesi yüklenemedi';
+                }
+
+                document.getElementById('patientList').innerHTML = (Array.isArray(data) ? data : []).map(p => `
                     <button onclick="startAnalysis('${p.uuid}', '${p.display}', event)" type="button"
                             class="w-full text-left p-4 bg-gray-800 rounded-2xl hover:bg-gray-700 border border-gray-700/50 transition-all flex items-center justify-between group">
                         <span class="truncate pr-2">📌 ${p.display}</span>
                         <span class="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">ANALİZ ET</span>
                     </button>
                 `).join('') || '<p class="text-gray-600 text-center text-xs mt-10 italic">Hasta bulunamadı.</p>';
+            }).catch(() => {
+                document.getElementById('patientCount').innerText = 'Hasta yüklenemedi';
+                document.getElementById('patientList').innerHTML = '<p class="text-gray-600 text-center text-xs mt-10 italic">Hasta yüklenirken bir hata oluştu.</p>';
             });
         }
 
