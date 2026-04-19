@@ -45,6 +45,37 @@
                     <div class="space-y-3">
                         <input type="text" id="pName" placeholder="Hasta Adı Soyadı" class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
 
+                        <div id="adminOrganSelect" class="hidden">
+                            <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">Organ Seçin (Select Organ)</label>
+                            <select id="pOrgan" class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none">
+                                <option value="Liver">Karaciğer (Liver)</option>
+                                <option value="Spleen">Dalak (Spleen)</option>
+                                <option value="R-Kidney">Sağ Böbrek (R-Kidney)</option>
+                                <option value="L-Kidney">Sol Böbrek (L-Kidney)</option>
+                                <option value="Stomach">Mide (Stomach)</option>
+                                <option value="Pancreas">Pankreas (Pancreas)</option>
+                                <option value="Gallbladder">Safra Kesesi (Gallbladder)</option>
+                                <option value="Aorta">Aorta</option>
+                                <option value="IVC">IVC</option>
+                                <option value="Portal Vein">Portal Ven</option>
+                                <option value="R-Adrenal">Sağ Adrenal</option>
+                                <option value="L-Adrenal">Sol Adrenal</option>
+                                <option value="Lung LUL">Sol Üst Akciğer</option>
+                                <option value="Lung LLL">Sol Alt Akciğer</option>
+                                <option value="Lung RUL">Sağ Üst Akciğer</option>
+                                <option value="Lung RML">Sağ Orta Akciğer</option>
+                                <option value="Lung RLL">Sağ Alt Akciğer</option>
+                                <option value="Esophagus">Yemek Borusu</option>
+                                <option value="Trachea">Trakea</option>
+                                <option value="Myocardium">Kalp Kası</option>
+                                <option value="LA">Sol Atriyum</option>
+                                <option value="LV">Sol Ventrikül</option>
+                                <option value="RA">Sağ Atriyum</option>
+                                <option value="RV">Sağ Ventrikül</option>
+                                <option value="Pulmonary Artery">Akciğer Arteri</option>
+                            </select>
+                        </div>
+
                         <div class="relative group">
                             <input type="file" id="pDicom" accept=".dcm,.dicom" class="hidden" webkitdirectory directory>
                             <label for="pDicom" class="flex flex-col items-center justify-center w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-xl cursor-pointer text-xs border border-dashed border-gray-500 transition-all">
@@ -202,6 +233,7 @@
             const label = document.querySelector("label[for='pDicom']");
             const doctorInfo = document.getElementById('doctorInfo');
             const manageDoctorsBtn = document.getElementById('manageDoctorsBtn');
+            const adminOrganSelect = document.getElementById('adminOrganSelect');
 
             input.setAttribute('webkitdirectory', '');
             input.setAttribute('directory', '');
@@ -210,9 +242,11 @@
             if (role === 'doctor') {
                 doctorInfo.classList.remove('hidden');
                 manageDoctorsBtn.classList.add('hidden');
+                adminOrganSelect.classList.add('hidden');
             } else {
                 doctorInfo.classList.add('hidden');
                 manageDoctorsBtn.classList.remove('hidden');
+                adminOrganSelect.classList.remove('hidden');
             }
         }
 
@@ -391,6 +425,7 @@
             const name = document.getElementById('pName').value;
             const fileInput = document.getElementById('pDicom');
             const btn = document.getElementById('uploadBtn');
+            const role = localStorage.getItem(ROLE_KEY) || 'doctor';
 
             if (!name || fileInput.files.length === 0) {
                 alert("Lütfen hasta adını yazın ve en az bir DICOM dosyası seçin. (Please enter patient name and select at least one DICOM file.)");
@@ -399,6 +434,14 @@
 
             const formData = new FormData();
             formData.append("name", name);
+            if (role === 'admin') {
+                const organ = document.getElementById('pOrgan').value;
+                if (!organ) {
+                    alert("Lütfen organ seçin. (Please select an organ.)");
+                    return;
+                }
+                formData.append("organ", organ);
+            }
             for (let i = 0; i < fileInput.files.length; i++) {
                 formData.append("files", fileInput.files[i]);
             }

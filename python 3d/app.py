@@ -10,6 +10,7 @@ import shutil
 import tempfile
 from pathlib import Path  # Dosya yollarını yönetmek için eklendi
 import nibabel as nib, pyvista as pv, numpy as np
+import pydicom
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pymongo import MongoClient
@@ -170,6 +171,31 @@ ORGAN_MAP = {
     49: ('Pulmonary Artery', '#0ea5e9')
 }
 
+# DICOM Body Part to Organ mapping
+BODY_PART_TO_ORGAN = {
+    'ABDOMEN': 'Liver',  # Default for abdomen
+    'CHEST': 'Lung LUL',  # Default for chest
+    'PELVIS': 'R-Kidney',  # Default for pelvis
+    'HEAD': 'Esophagus',  # Placeholder
+    'NECK': 'Trachea',
+    'SPINE': 'Myocardium',  # Placeholder
+    'EXTREMITY': 'Spleen',  # Placeholder
+    'WHOLEBODY': 'Liver'  # Placeholder
+}
+
+def detect_organ_from_dicom(file_path: str) -> str:
+    """DICOM dosyasından organ tespit et."""
+    try:
+        ds = pydicom.dcmread(file_path)
+        body_part = getattr(ds, 'BodyPartExamined', None)
+        if body_part and body_part.upper() in BODY_PART_TO_ORGAN:
+            return BODY_PART_TO_ORGAN[body_part.upper()]
+        # Eğer body part yok veya eşleşmezse, default olarak Liver döndür (ama aslında None döndürmek daha iyi)
+        return None
+    except Exception as e:
+        print(f"DICOM organ tespiti hatası: {e}")
+        return None
+
 @app.post("/login")
 async def login(credentials: dict):
     username = credentials.get("username")
@@ -254,16 +280,40 @@ async def create_doctor(data: dict, current_user: dict = Depends(require_admin))
 
 # --- 1. PATIENT UPLOAD ---
 @app.post("/upload-patient")
-async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(...), current_user: dict = Depends(get_current_user)):
+async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(...), organ: str = Form(None), current_user: dict = Depends(get_current_user)):
     patient_uuid = None
     upload_count = 0
     uploader = current_user.get("username")
-    allowed_organ = None
+    detected_organ = None
+
     if current_user.get("role") == "doctor":
         user = get_user(uploader)
         allowed_organ = user.get("allowed_organ")
         if not allowed_organ:
             raise HTTPException(status_code=403, detail="Lütfen önce bir organ atanmış bir doktor hesabıyla giriş yapın.")
+
+        # Doktor için DICOM'dan organ tespit et
+        if files:
+            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+                shutil.copyfileobj(files[0].file, temp_file)
+                temp_path = temp_file.name
+            try:
+                detected_organ = detect_organ_from_dicom(temp_path)
+            finally:
+                if os.path.exists(temp_path): os.remove(temp_path)
+
+            if detected_organ != allowed_organ:
+                raise HTTPException(status_code=403, detail=f"Bu DICOM dosyası {detected_organ or 'bilinmeyen'} organına ait. Siz sadece {allowed_organ} organı için yükleme yapabilirsiniz.")
+
+        patient_organ = detected_organ
+
+    elif current_user.get("role") == "admin":
+        # Admin için form'dan organ al
+        if not organ:
+            raise HTTPException(status_code=400, detail="Admin olarak yükleme yaparken organ seçmeniz gereklidir.")
+        patient_organ = organ
+    else:
+        raise HTTPException(status_code=403, detail="Geçersiz rol.")
 
     try:
         for file in files:
@@ -292,8 +342,8 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
             "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S"),
             "uploader": uploader
         }
-        if allowed_organ:
-            update_data["allowed_organ"] = allowed_organ
+        if patient_organ:
+            update_data["allowed_organ"] = patient_organ
 
         hastalar_col.update_one(
             {"orthanc_id": patient_uuid},
