@@ -3,12 +3,11 @@
 
 <head>
     <meta charset="UTF-8">
-        <title>AI Organ Analizi | Hasta Yönetim Sistemi</title>
-        <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+        <title>Hasta Yönetim Sistemi</title>
         <script src="https://cdn.tailwindcss.com"></script>
     </head>
 
-    <body class="bg-[#0e1117] text-white overflow-hidden font-sans">
+    <body class="bg-[#0e1117] text-white font-sans">
 
         <div id="loginModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4">
             <div class="w-full max-w-md bg-[#111827] rounded-3xl border border-gray-700 p-8 shadow-2xl">
@@ -23,105 +22,57 @@
             </div>
         </div>
 
-    <div id="appWrapper" class="hidden">
-        <div class="flex h-screen">
-            <div class="w-80 bg-[#1f2937] p-6 border-r border-gray-700 flex flex-col shadow-xl overflow-hidden max-h-screen">
-                <div class="flex items-center justify-between mb-6 gap-2">
-                    <h2 class="text-xl font-bold text-blue-400 flex items-center gap-2">
-                        📁 Hasta Yönetimi (Patient Management)
-                    </h2>
-                    <div class="flex items-center gap-2">
-                        <button id="manageDoctorsBtn" onclick="openDoctorManager()" class="hidden text-xs uppercase px-3 py-2 rounded-full border border-cyan-500 text-cyan-200 hover:bg-cyan-500/10 transition">Doktor Yönetimi</button>
-                        <button id="logoutBtn" onclick="logout()" class="text-xs uppercase px-3 py-2 rounded-full border border-slate-600 text-slate-200 hover:bg-slate-700 transition">🚪 Çıkış</button>
-                        <span id="userRoleLabel" class="text-xs uppercase tracking-wide px-3 py-2 rounded-full bg-slate-700 text-slate-200">Giriş Bekleniyor</span>
-                    </div>
+    <div id="appWrapper" class="hidden min-h-screen">
+        <div class="max-w-5xl mx-auto p-6 flex flex-col min-h-screen">
+
+            <div class="flex items-center justify-between mb-6 gap-2">
+                <h2 class="text-xl font-bold text-blue-400 flex items-center gap-2">
+                    📁 Hasta Yönetimi (Patient Management)
+                </h2>
+                <div class="flex items-center gap-2">
+                    <button id="manageDoctorsBtn" onclick="openDoctorManager()" class="hidden text-xs uppercase px-3 py-2 rounded-full border border-cyan-500 text-cyan-200 hover:bg-cyan-500/10 transition">Doktor Yönetimi</button>
+                    <button id="logoutBtn" onclick="logout()" class="text-xs uppercase px-3 py-2 rounded-full border border-slate-600 text-slate-200 hover:bg-slate-700 transition">🚪 Çıkış</button>
+                    <span id="userRoleLabel" class="text-xs uppercase tracking-wide px-3 py-2 rounded-full bg-slate-700 text-slate-200">Giriş Bekleniyor</span>
                 </div>
-
-                <div class="mb-8 p-4 bg-gray-800/50 rounded-2xl border border-blue-500/20 shadow-inner">
-                    <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider mb-3">➕ Yeni Kayıt & Yükleme (New Record & Upload)</h3>
-                    <div id="doctorInfo" class="hidden mb-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
-                        Doktor panelinden klasör seçimi yapmanız gerekiyor. Seçebileceğiniz organ: <strong id="allowedOrganName">Karaciğer</strong>.
-                    </div>
-                    <div class="space-y-3">
-                        <input type="text" id="pName" placeholder="Hasta Adı Soyadı" class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
-
-                        <div id="adminOrganSelect" class="hidden">
-                            <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">Organ Seçin (Select Organ)</label>
-                            <select id="pOrgan" class="w-full bg-[#0e1117] border border-gray-600 p-2.5 rounded-xl text-sm text-white focus:border-blue-500 outline-none">
-                                <option value="Liver">Karaciğer (Liver)</option>
-                                <option value="Spleen">Dalak (Spleen)</option>
-                                <option value="R-Kidney">Sağ Böbrek (R-Kidney)</option>
-                                <option value="L-Kidney">Sol Böbrek (L-Kidney)</option>
-                                <option value="Stomach">Mide (Stomach)</option>
-                                <option value="Pancreas">Pankreas (Pancreas)</option>
-                                <option value="Gallbladder">Safra Kesesi (Gallbladder)</option>
-                                <option value="Aorta">Aorta</option>
-                                <option value="IVC">IVC</option>
-                                <option value="Portal Vein">Portal Ven</option>
-                                <option value="R-Adrenal">Sağ Adrenal</option>
-                                <option value="L-Adrenal">Sol Adrenal</option>
-                                <option value="Lung LUL">Sol Üst Akciğer</option>
-                                <option value="Lung LLL">Sol Alt Akciğer</option>
-                                <option value="Lung RUL">Sağ Üst Akciğer</option>
-                                <option value="Lung RML">Sağ Orta Akciğer</option>
-                                <option value="Lung RLL">Sağ Alt Akciğer</option>
-                                <option value="Esophagus">Yemek Borusu</option>
-                                <option value="Trachea">Trakea</option>
-                                <option value="Myocardium">Kalp Kası</option>
-                                <option value="LA">Sol Atriyum</option>
-                                <option value="LV">Sol Ventrikül</option>
-                                <option value="RA">Sağ Atriyum</option>
-                                <option value="RV">Sağ Ventrikül</option>
-                                <option value="Pulmonary Artery">Akciğer Arteri</option>
-                            </select>
-                        </div>
-
-                        <div class="relative group">
-                            <input type="file" id="pDicom" accept=".dcm,.dicom" class="hidden" webkitdirectory directory>
-                            <label for="pDicom" class="flex flex-col items-center justify-center w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-xl cursor-pointer text-xs border border-dashed border-gray-500 transition-all">
-                                <span>📁 DICOM Klasörünü Seç</span>
-                                <span class="text-[10px] text-gray-400 mt-1">Klasör seçeneğiyle birden fazla DICOM dosyasını yükleyin.</span>
-                            </label>
-                        </div>
-
-                        <button onclick="saveAndUpload()" id="uploadBtn" class="w-full bg-blue-600 hover:bg-blue-500 p-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95">
-                            Sisteme Kaydet (Save to System)
-                        </button>
-                    </div>
-                </div>
-
-                <div class="flex items-center justify-between mb-3 px-1">
-                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">📋 Kayıtlı Hastalar (Registered Patients)</h3>
-                    <span id="patientCount" class="text-[11px] text-slate-400">Yükleniyor...</span>
-                </div>
-                <div id="patientList" class="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                    <div class="text-center text-gray-500 text-sm py-10 italic">Yükleniyor...</div>
-                </div>
-
-                <button id="resetBtn" onclick="resetVRAM(event)" class="mt-6 w-full bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white p-4 rounded-xl border border-red-600/30 flex items-center justify-center gap-2 font-bold transition-all group">
-                    <span id="resetIcon" class="group-hover:rotate-180 transition-transform duration-500">♻️</span>
-                    <span id="resetText">VRAM Sıfırla (Reset VRAM)</span>
-                </button>
             </div>
 
-            <div class="flex-1 p-8 flex flex-col relative bg-[#0e1117]">
-                <div id="progressArea" class="hidden mb-6 bg-gray-800/80 backdrop-blur-md p-5 rounded-2xl border border-blue-500/30 shadow-lg animate-pulse">
-                    <div class="flex justify-between mb-3">
-                        <span id="stepText" class="text-blue-300 font-bold tracking-tight">AI İşleniyor...</span>
-                        <span id="percentText" class="font-mono bg-blue-900/50 px-2 py-0.5 rounded text-blue-200">0%</span>
-                    </div>
-                    <div class="w-full bg-gray-900 rounded-full h-2.5 overflow-hidden">
-                        <div id="progressBar" class="bg-gradient-to-r from-blue-600 to-cyan-400 h-full rounded-full transition-all duration-700 w-0 shadow-[0_0_10px_rgba(37,99,235,0.5)]"></div>
-                    </div>
+            <div class="mb-8 p-6 bg-gray-800/50 rounded-2xl border border-blue-500/20 shadow-inner">
+                <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider mb-4">➕ Yeni Kayıt & Yükleme (New Record & Upload)</h3>
+                <div id="doctorInfo" class="hidden mb-4 rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+                    Doktor panelinden klasör seçimi yapmanız gerekiyor. Seçebileceğiniz bölge: <strong id="allowedOrganName">Karın Bölgesi</strong>.
                 </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <input type="text" id="pName" placeholder="Hasta Adı Soyadı" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
 
-                <div id="canvasBox" class="flex-1 bg-[#161b22] rounded-[2rem] border border-gray-800 relative shadow-2xl overflow-hidden group">
-                    <div id="myPlot" class="w-full h-full opacity-0 transition-opacity duration-1000"></div>
-                    <div id="emptyMsg" class="absolute inset-0 flex flex-col items-center justify-center text-gray-600 pointer-events-none transition-all duration-500">
-                        <div class="text-6xl mb-4 opacity-20">🧠</div>
-                        <p class="text-xl font-light tracking-wide italic">Analiz için soldan hasta seçin veya yeni kayıt ekleyin...</p>
+                    <div id="adminOrganSelect" class="hidden">
+                        <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">Bölge Seçin (Select Region)</label>
+                        <select id="pOrgan" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none">
+                            <option value="Abdomen">Karın Bölgesi (Abdomen)</option>
+                            <option value="Chest">Göğüs Bölgesi (Chest)</option>
+                            <option value="Head">Baş Bölgesi (Head)</option>
+                        </select>
                     </div>
+
+                    <div class="relative group">
+                        <input type="file" id="pDicom" accept=".dcm,.dicom" class="hidden" webkitdirectory directory>
+                        <label for="pDicom" class="flex flex-col items-center justify-center w-full p-4 bg-gray-700 hover:bg-gray-600 rounded-xl cursor-pointer text-xs border border-dashed border-gray-500 transition-all">
+                            <span>📁 DICOM Klasörünü Seç</span>
+                            <span class="text-[10px] text-gray-400 mt-1">Klasör seçeneğiyle birden fazla DICOM dosyasını yükleyin.</span>
+                        </label>
+                    </div>
+
+                    <button onclick="saveAndUpload()" id="uploadBtn" class="w-full bg-blue-600 hover:bg-blue-500 p-3 rounded-xl text-sm font-bold shadow-lg shadow-blue-900/20 transition-all active:scale-95">
+                        Sisteme Kaydet (Save to System)
+                    </button>
                 </div>
+            </div>
+
+            <div class="flex items-center justify-between mb-3 px-1">
+                <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider">📋 Kayıtlı Hastalar (Registered Patients)</h3>
+                <span id="patientCount" class="text-[11px] text-slate-400">Yükleniyor...</span>
+            </div>
+            <div id="patientList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto custom-scrollbar">
+                <div class="col-span-full text-center text-gray-500 text-sm py-10 italic">Yükleniyor...</div>
             </div>
         </div>
     </div>
@@ -144,12 +95,9 @@
                     <div>
                         <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">Atanacak Organ</label>
                         <select id="allowedOrganSelect" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-2xl text-sm text-white focus:border-cyan-400 outline-none">
-                            <option value="Liver">Karaciğer</option>
-                            <option value="Spleen">Dalak</option>
-                            <option value="R-Kidney">Sağ Böbrek</option>
-                            <option value="L-Kidney">Sol Böbrek</option>
-                            <option value="Stomach">Mide</option>
-                            <option value="Pancreas">Pankreas</option>
+                            <option value="Abdomen">Karın Bölgesi</option>
+                            <option value="Chest">Göğüs Bölgesi</option>
+                            <option value="Head">Baş Bölgesi</option>
                         </select>
                     </div>
                 </div>
@@ -170,24 +118,15 @@
         .custom-scrollbar::-webkit-scrollbar {
             width: 4px;
         }
-
         .custom-scrollbar::-webkit-scrollbar-track {
             background: transparent;
         }
-
         .custom-scrollbar::-webkit-scrollbar-thumb {
             background: #374151;
             border-radius: 10px;
         }
-
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #4b5563;
-        }
-
-        .patient-btn-active {
-            border-color: #2563eb !important;
-            background: #1e3a8a !important;
-            box-shadow: 0 0 15px rgba(37, 99, 235, 0.2);
         }
     </style>
 
@@ -210,12 +149,9 @@
         }
 
         const organDisplay = {
-            "Liver": "Karaciğer",
-            "Spleen": "Dalak",
-            "R-Kidney": "Sağ Böbrek",
-            "L-Kidney": "Sol Böbrek",
-            "Stomach": "Mide",
-            "Pancreas": "Pankreas"
+            "Abdomen": "Karın Bölgesi",
+            "Chest": "Göğüs Bölgesi",
+            "Head": "Baş Bölgesi"
         };
 
         function showApp() {
@@ -237,6 +173,7 @@
 
             input.setAttribute('webkitdirectory', '');
             input.setAttribute('directory', '');
+            input.setAttribute('accept', '.dcm,.dicom');
             input.removeAttribute('multiple');
             label.innerHTML = `<span>📁 DICOM Klasörü Seçin</span><span class="text-[10px] text-gray-400 mt-1">Klasör seçeneğiyle birden fazla DICOM dosyasını yükleyin.</span>`;
             if (role === 'doctor') {
@@ -323,7 +260,7 @@
         async function createDoctor() {
             const username = document.getElementById('newDoctorUsername').value.trim();
             const password = document.getElementById('newDoctorPassword').value.trim();
-            const allowedOrgan = document.getElementById('allowedOrganSelect').value || 'Liver';
+            const allowedOrgan = document.getElementById('allowedOrganSelect').value || 'Abdomen';
             const btn = document.getElementById('createDoctorBtn');
             if (!username || !password) {
                 alert('Yeni doktor için kullanıcı adı ve şifre girin.');
@@ -432,6 +369,14 @@
                 return;
             }
 
+            const dicomFiles = Array.from(fileInput.files).filter(file => 
+                file.name.toLowerCase().endsWith('.dcm') || file.name.toLowerCase().endsWith('.dicom')
+            );
+            if (dicomFiles.length === 0) {
+                alert("Seçilen klasörde geçerli DICOM dosyası bulunamadı. Sadece .dcm veya .dicom uzantılı dosyalar yüklenebilir.");
+                return;
+            }
+
             const formData = new FormData();
             formData.append("name", name);
             if (role === 'admin') {
@@ -475,73 +420,6 @@
             }
         }
 
-        async function startAnalysis(uuid, name, event) {
-            if (event) event.preventDefault();
-            document.querySelectorAll('#patientList button').forEach(b => b.classList.remove('patient-btn-active'));
-            if (event) event.currentTarget.classList.add('patient-btn-active');
-            document.getElementById('emptyMsg').style.opacity = "0";
-            document.getElementById('myPlot').style.opacity = "0";
-
-            try {
-                setProgress(20, "DICOM Verileri PACS'tan Alınıyor...");
-                const res = await fetch(`${API}/segment/${uuid}`, { headers: authHeaders() });
-                if (!res.ok) throw new Error("GPU/VRAM Hatası oluştu!");
-
-                setProgress(80, "3D Mesh Verisi Render Ediliyor...");
-                const data = await res.json();
-
-                const traces = data.meshes.map(m => ({
-                    type: 'mesh3d',
-                    x: m.vertices.map(v => v[0]), y: m.vertices.map(v => v[1]), z: m.vertices.map(v => v[2]),
-                    i: m.faces.map(f => f[0]), j: m.faces.map(f => f[1]), k: m.faces.map(f => f[2]),
-                    color: m.color, opacity: 0.8, name: m.name, showlegend: true,
-                    flatshading: false, lighting: { ambient: 0.4, diffuse: 0.8, specular: 0.1 }
-                }));
-
-                const layout = {
-                    scene: { xaxis: { visible: false }, yaxis: { visible: false }, zaxis: { visible: false }, aspectmode: 'data' },
-                    margin: { l: 0, r: 0, b: 0, t: 0 }, paper_bgcolor: 'rgba(0,0,0,0)',
-                    legend: { font: { color: 'white', size: 10 }, x: 0.02, y: 0.98, bgcolor: 'rgba(0,0,0,0.5)' }
-                };
-
-                await Plotly.newPlot('myPlot', traces, layout, { responsive: true, displayModeBar: false });
-                document.getElementById('myPlot').style.opacity = "1";
-                setProgress(100, "Analiz Tamamlandı!");
-                setTimeout(() => document.getElementById('progressArea').classList.add('hidden'), 3000);
-            } catch (e) {
-                alert("Kritik Hata: " + e.message);
-                document.getElementById('progressArea').classList.add('hidden');
-                document.getElementById('emptyMsg').style.opacity = "1";
-            }
-        }
-
-        function setProgress(percent, text) {
-            const area = document.getElementById('progressArea');
-            document.getElementById('progressBar').style.width = percent + "%";
-            document.getElementById('stepText').innerText = text;
-            document.getElementById('percentText').innerText = percent + "%";
-            area.classList.remove('hidden');
-        }
-
-        async function resetVRAM(event) {
-            event.preventDefault();
-            const btn = document.getElementById('resetBtn');
-            const text = document.getElementById('resetText');
-            btn.disabled = true;
-            text.innerText = 'Sıfırlanıyor...';
-
-            try {
-                await fetch(`${API}/reset-vram`, { method: 'POST', headers: authHeaders() });
-                alert('VRAM Temizlendi! (VRAM Cleared!)');
-                loadPatients();
-            } catch (e) {
-                alert('Bağlantı hatası. (Connection error.)');
-            } finally {
-                btn.disabled = false;
-                text.innerText = 'VRAM Sıfırla';
-            }
-        }
-
         function loadPatients() {
             fetch(`${API}/patients`, { headers: authHeaders() }).then(r => {
                 if (r.status === 401) {
@@ -558,15 +436,13 @@
                 }
 
                 document.getElementById('patientList').innerHTML = (Array.isArray(data) ? data : []).map(p => `
-                    <button onclick="startAnalysis('${p.uuid}', '${p.display}', event)" type="button"
-                            class="w-full text-left p-4 bg-gray-800 rounded-2xl hover:bg-gray-700 border border-gray-700/50 transition-all flex items-center justify-between group">
+                    <div class="w-full text-left p-4 bg-gray-800 rounded-2xl border border-gray-700/50">
                         <span class="truncate pr-2">📌 ${p.display}</span>
-                        <span class="text-[10px] text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity">ANALİZ ET</span>
-                    </button>
-                `).join('') || '<p class="text-gray-600 text-center text-xs mt-10 italic">Hasta bulunamadı.</p>';
+                    </div>
+                `).join('') || '<p class="col-span-full text-gray-600 text-center text-xs mt-10 italic">Hasta bulunamadı.</p>';
             }).catch(() => {
                 document.getElementById('patientCount').innerText = 'Hasta yüklenemedi';
-                document.getElementById('patientList').innerHTML = '<p class="text-gray-600 text-center text-xs mt-10 italic">Hasta yüklenirken bir hata oluştu.</p>';
+                document.getElementById('patientList').innerHTML = '<p class="col-span-full text-gray-600 text-center text-xs mt-10 italic">Hasta yüklenirken bir hata oluştu.</p>';
             });
         }
 

@@ -9,7 +9,6 @@ import requests
 import shutil
 import tempfile
 from pathlib import Path  # Dosya yollarını yönetmek için eklendi
-import nibabel as nib, pyvista as pv, numpy as np
 import pydicom
 from fastapi import Depends, FastAPI, Header, HTTPException, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
@@ -30,7 +29,6 @@ MONGO_USER = os.getenv("MONGO_USER")
 MONGO_PASS = os.getenv("MONGO_PASS")
 MONGO_CLUSTER = os.getenv("MONGO_CLUSTER")
 ORTHANC_URL = os.getenv("ORTHANC_URL")
-MONAI_URL = os.getenv("MONAI_URL")
 
 # --- HATA KONTROLÜ (CRITICAL) ---
 if MONGO_PASS is None:
@@ -40,12 +38,7 @@ if MONGO_PASS is None:
     exit(1) # Uygulamayı durdur
 
 def check_monai_ready():
-    """Check if MONAI Label service is ready."""
-    try:
-        res = requests.get(f"{MONAI_URL}/health", timeout=5)
-        return res.status_code == 200
-    except Exception:
-        return False
+    return True  # Always return True since MONAI is not used
 
 # URL Encoding for MongoDB Password
 encoded_pass = urllib.parse.quote_plus(MONGO_PASS)
@@ -173,14 +166,14 @@ ORGAN_MAP = {
 
 # DICOM Body Part to Organ mapping
 BODY_PART_TO_ORGAN = {
-    'ABDOMEN': 'Liver',  # Default for abdomen
-    'CHEST': 'Lung LUL',  # Default for chest
-    'PELVIS': 'R-Kidney',  # Default for pelvis
-    'HEAD': 'Esophagus',  # Placeholder
-    'NECK': 'Trachea',
-    'SPINE': 'Myocardium',  # Placeholder
-    'EXTREMITY': 'Spleen',  # Placeholder
-    'WHOLEBODY': 'Liver'  # Placeholder
+    'ABDOMEN': 'Abdomen',  # Karın bölgesi
+    'CHEST': 'Chest',     # Göğüs bölgesi
+    'HEAD': 'Head',       # Baş bölgesi
+    'PELVIS': 'Abdomen',  # Pelvis'i karın olarak kabul et
+    'NECK': 'Chest',      # Boyun'u göğüs olarak kabul et
+    'SPINE': 'Chest',     # Omurga'yı göğüs olarak kabul et
+    'EXTREMITY': 'Abdomen',  # Placeholder
+    'WHOLEBODY': 'Abdomen'   # Placeholder
 }
 
 def detect_organ_from_dicom(file_path: str) -> str:
@@ -237,7 +230,7 @@ async def get_settings(current_user: dict = Depends(get_current_user)):
         return {"role": "admin", "doctors": docs}
 
     user = get_user(current_user["username"])
-    return {"role": "doctor", "allowed_organ": user.get("allowed_organ", "Liver"), "username": current_user["username"]}
+    return {"role": "doctor", "allowed_organ": user.get("allowed_organ", "Abdomen"), "username": current_user["username"]}
 
 
 @app.post("/settings/allowed-organ")
@@ -262,7 +255,7 @@ async def update_allowed_organ(data: dict, current_user: dict = Depends(require_
 async def create_doctor(data: dict, current_user: dict = Depends(require_admin)):
     username = data.get("username")
     password = data.get("password")
-    allowed_organ = data.get("allowed_organ", "Liver")
+    allowed_organ = data.get("allowed_organ", "Abdomen")
     if not username or not password:
         raise HTTPException(status_code=400, detail="username ve password gerekli.")
 
@@ -291,21 +284,7 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
         allowed_organ = user.get("allowed_organ")
         if not allowed_organ:
             raise HTTPException(status_code=403, detail="Lütfen önce bir organ atanmış bir doktor hesabıyla giriş yapın.")
-
-        # Doktor için DICOM'dan organ tespit et
-        if files:
-            with tempfile.NamedTemporaryFile(delete=False) as temp_file:
-                shutil.copyfileobj(files[0].file, temp_file)
-                temp_path = temp_file.name
-            try:
-                detected_organ = detect_organ_from_dicom(temp_path)
-            finally:
-                if os.path.exists(temp_path): os.remove(temp_path)
-
-            if detected_organ != allowed_organ:
-                raise HTTPException(status_code=403, detail=f"Bu DICOM dosyası {detected_organ or 'bilinmeyen'} organına ait. Siz sadece {allowed_organ} organı için yükleme yapabilirsiniz.")
-
-        patient_organ = detected_organ
+        patient_organ = None  # Doktorlar serbestçe yükleyebilir, organ kısıtlaması kaldırıldı
 
     elif current_user.get("role") == "admin":
         # Admin için form'dan organ al
@@ -317,6 +296,10 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
 
     try:
         for file in files:
+            # Sadece DICOM uzantılı dosyaları işle
+            if not file.filename.lower().endswith(('.dcm', '.dicom')):
+                continue  # DICOM olmayan dosyaları atla
+            
             with tempfile.NamedTemporaryFile(delete=False) as temp_file:
                 shutil.copyfileobj(file.file, temp_file)
                 temp_path = temp_file.name
@@ -334,7 +317,7 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
                 if os.path.exists(temp_path): os.remove(temp_path)
 
         if not patient_uuid:
-            raise Exception("Orthanc upload failed.")
+            raise Exception("Geçerli DICOM dosyası bulunamadı. Sadece .dcm veya .dicom uzantılı dosyalar yüklenebilir.")
 
         update_data = {
             "name": name,
@@ -406,63 +389,6 @@ async def delete_patient(patient_uuid: str):
     except Exception as e:
         print(f"Delete Error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
-# --- 3. AI SEGMENTATION ---
-@app.get("/segment/{patient_uuid}")
-async def run_segmentation(patient_uuid: str, current_user: dict = Depends(get_current_user)):
-    if current_user.get("role") == "doctor":
-        patient_doc = hastalar_col.find_one({"orthanc_id": patient_uuid})
-        if not patient_doc:
-            raise HTTPException(status_code=404, detail="Hasta bulunamadı.")
-        user = get_user(current_user["username"])
-        allowed_organ = user.get("allowed_organ")
-        if not allowed_organ or (patient_doc.get("uploader") != current_user["username"] and patient_doc.get("allowed_organ") != allowed_organ):
-            raise HTTPException(status_code=403, detail="Bu hastanın görüntülenmesine izin verilmez.")
-
-    fd, temp_nii = tempfile.mkstemp(suffix=".nii.gz")
-    os.close(fd)
-    try:
-        p_info = requests.get(f"{ORTHANC_URL}/patients/{patient_uuid}", auth=('orthanc', 'orthanc')).json()
-        series_id = requests.get(f"{ORTHANC_URL}/studies/{p_info['Studies'][0]}", auth=('orthanc', 'orthanc')).json()['Series'][0]
-        dicom_uid = requests.get(f"{ORTHANC_URL}/series/{series_id}", auth=('orthanc', 'orthanc')).json()['MainDicomTags']['SeriesInstanceUID']
-
-        payload = {"params": {"device": "cuda:0", "sw_batch_size": 1, "roi_size": [128, 128, 128], "overlap": 0.50}}
-        res = requests.post(f"{MONAI_URL}/infer/segmentation?image={dicom_uid}", json=payload, timeout=None)
-        
-        if res.status_code != 200: raise Exception("AI Service Error")
-
-        content = res.content
-        gzip_start = content.find(b'\x1f\x8b\x08')
-        with open(temp_nii, "wb") as f: f.write(content[gzip_start:])
-
-        nifti = nib.load(temp_nii)
-        data = nifti.get_fdata()
-        zooms = nifti.header.get_zooms()
-        all_meshes = []
-        
-        for label, (name, color) in ORGAN_MAP.items():
-            mask = (data == label).astype(np.uint8)
-            if not np.any(mask): continue
-            
-            grid = pv.ImageData(dimensions=mask.shape, spacing=zooms)
-            grid.point_data["values"] = mask.flatten(order="F")
-            mesh = grid.contour([0.5]).decimate(0.95).smooth_taubin(n_iter=20) 
-            
-            if mesh.n_points > 0:
-                all_meshes.append({
-                    "name": name, "color": color,
-                    "vertices": mesh.points.tolist(),
-                    "faces": mesh.faces.reshape((-1, 4))[:, 1:4].tolist()
-                })
-        return {"meshes": all_meshes}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        if os.path.exists(temp_nii): os.remove(temp_nii)
-
-@app.post("/reset-vram")
-async def reset_vram(current_user: dict = Depends(get_current_user)):
-    return {"status": "success"}
 
 if __name__ == "__main__":
     import uvicorn
