@@ -44,6 +44,23 @@
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <input type="text" id="pName" placeholder="Hasta Adı Soyadı" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-xl text-sm focus:border-blue-500 outline-none transition-all">
 
+                    <div id="adminGenderSelect" class="hidden">
+                        <select id="pGender" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none">
+                            <option value="">Cinsiyet Seçin</option>
+                            <option value="Erkek">Erkek</option>
+                            <option value="Kadın">Kadın</option>
+                            <option value="Diğer">Diğer</option>
+                        </select>
+                    </div>
+
+                    <div id="adminAgeInput" class="hidden">
+                        <input type="number" id="pAge" placeholder="Yaş" min="0" max="150" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none">
+                    </div>
+
+                    <div id="adminDateInput" class="hidden">
+                        <input type="date" id="pScanDate" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none">
+                    </div>
+
                     <div id="adminOrganSelect" class="hidden">
                         <label class="block text-xs uppercase tracking-wide text-gray-400 mb-2">Bölge Seçin (Select Region)</label>
                         <select id="pOrgan" class="w-full bg-[#0e1117] border border-gray-600 p-3 rounded-xl text-sm text-white focus:border-blue-500 outline-none">
@@ -73,6 +90,51 @@
             </div>
             <div id="patientList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto custom-scrollbar">
                 <div class="col-span-full text-center text-gray-500 text-sm py-10 italic">Yükleniyor...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- HASTA DETAY & DICOM SLICER MODAL -->
+    <div id="patientDetailModal" class="hidden fixed inset-0 z-50 bg-black/85 p-4 overflow-auto">
+        <div class="max-w-3xl mx-auto bg-[#111827] rounded-3xl border border-gray-700 shadow-2xl overflow-hidden">
+            <div class="flex items-center justify-between p-6 border-b border-gray-700">
+                <div class="flex items-center gap-3">
+                    <span class="text-3xl">👤</span>
+                    <div>
+                        <h2 id="detailName" class="text-xl font-bold text-white">Hasta Adı</h2>
+                        <p class="text-xs text-gray-400">Hasta Detay Bilgileri</p>
+                    </div>
+                </div>
+                <button onclick="closePatientDetail()" class="text-sm px-4 py-2 rounded-full border border-gray-600 text-white hover:bg-gray-700 transition">✕ Kapat</button>
+            </div>
+            <div class="grid grid-cols-3 gap-4 p-6 border-b border-gray-700/50">
+                <div class="bg-gray-800/60 rounded-xl p-4 text-center">
+                    <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Yaş</p>
+                    <p id="detailAge" class="text-lg font-bold text-blue-300">—</p>
+                </div>
+                <div class="bg-gray-800/60 rounded-xl p-4 text-center">
+                    <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Cinsiyet</p>
+                    <p id="detailGender" class="text-lg font-bold text-purple-300">—</p>
+                </div>
+                <div class="bg-gray-800/60 rounded-xl p-4 text-center">
+                    <p class="text-[10px] uppercase tracking-wider text-gray-500 mb-1">Tarih</p>
+                    <p id="detailDate" class="text-lg font-bold text-green-300">—</p>
+                </div>
+            </div>
+            <div class="p-6">
+                <h3 class="text-xs font-bold text-blue-300 uppercase tracking-wider mb-4">🔬 DICOM Kesit Görüntüleyici</h3>
+                <div id="slicerContainer" class="relative bg-black rounded-xl overflow-hidden flex items-center justify-center" style="min-height:400px;">
+                    <div id="slicerLoading" class="text-gray-500 text-sm">Kesitler yükleniyor...</div>
+                    <img id="slicerImage" class="hidden max-w-full max-h-[500px] object-contain" alt="DICOM Slice">
+                </div>
+                <div id="slicerControls" class="hidden mt-4">
+                    <input type="range" id="sliceSlider" min="0" max="0" value="0" class="w-full accent-blue-500 cursor-pointer">
+                    <div class="flex items-center justify-between mt-2 text-xs text-gray-400">
+                        <span>Kesit:</span>
+                        <span id="sliceInfo">0 / 0</span>
+                    </div>
+                </div>
+                <div id="slicerError" class="hidden text-center text-red-400 text-sm py-8">Görüntü yüklenemedi.</div>
             </div>
         </div>
     </div>
@@ -170,6 +232,9 @@
             const doctorInfo = document.getElementById('doctorInfo');
             const manageDoctorsBtn = document.getElementById('manageDoctorsBtn');
             const adminOrganSelect = document.getElementById('adminOrganSelect');
+            const adminGenderSelect = document.getElementById('adminGenderSelect');
+            const adminAgeInput = document.getElementById('adminAgeInput');
+            const adminDateInput = document.getElementById('adminDateInput');
 
             input.setAttribute('webkitdirectory', '');
             input.setAttribute('directory', '');
@@ -180,10 +245,16 @@
                 doctorInfo.classList.remove('hidden');
                 manageDoctorsBtn.classList.add('hidden');
                 adminOrganSelect.classList.add('hidden');
+                adminGenderSelect.classList.add('hidden');
+                adminAgeInput.classList.add('hidden');
+                adminDateInput.classList.add('hidden');
             } else {
                 doctorInfo.classList.add('hidden');
                 manageDoctorsBtn.classList.remove('hidden');
                 adminOrganSelect.classList.remove('hidden');
+                adminGenderSelect.classList.remove('hidden');
+                adminAgeInput.classList.remove('hidden');
+                adminDateInput.classList.remove('hidden');
             }
         }
 
@@ -365,7 +436,7 @@
             const role = localStorage.getItem(ROLE_KEY) || 'doctor';
 
             if (!name || fileInput.files.length === 0) {
-                alert("Lütfen hasta adını yazın ve en az bir DICOM dosyası seçin. (Please enter patient name and select at least one DICOM file.)");
+                alert("Lütfen hasta adını yazın ve en az bir DICOM dosyası seçin.");
                 return;
             }
 
@@ -373,7 +444,7 @@
                 file.name.toLowerCase().endsWith('.dcm') || file.name.toLowerCase().endsWith('.dicom')
             );
             if (dicomFiles.length === 0) {
-                alert("Seçilen klasörde geçerli DICOM dosyası bulunamadı. Sadece .dcm veya .dicom uzantılı dosyalar yüklenebilir.");
+                alert("Seçilen klasörde geçerli DICOM dosyası bulunamadı.");
                 return;
             }
 
@@ -381,11 +452,14 @@
             formData.append("name", name);
             if (role === 'admin') {
                 const organ = document.getElementById('pOrgan').value;
-                if (!organ) {
-                    alert("Lütfen organ seçin. (Please select an organ.)");
-                    return;
-                }
+                if (!organ) { alert("Lütfen organ seçin."); return; }
                 formData.append("organ", organ);
+                const gender = document.getElementById('pGender').value;
+                const age = document.getElementById('pAge').value;
+                const scanDate = document.getElementById('pScanDate').value;
+                if (gender) formData.append("gender", gender);
+                if (age) formData.append("age", age);
+                if (scanDate) formData.append("scan_date", scanDate);
             }
             for (let i = 0; i < fileInput.files.length; i++) {
                 formData.append("files", fileInput.files[i]);
@@ -404,15 +478,20 @@
                 const result = await res.json();
 
                 if (result.status === "success") {
-                    alert("Kayıt Başarılı! (Registration Successful!)");
+                    alert("Kayıt Başarılı!");
                     loadPatients();
                     document.getElementById('pName').value = "";
                     document.getElementById('pDicom').value = "";
+                    if (role === 'admin') {
+                        document.getElementById('pGender').value = "";
+                        document.getElementById('pAge').value = "";
+                        document.getElementById('pScanDate').value = "";
+                    }
                 } else {
                     throw new Error(result.message || 'Yükleme başarısız.');
                 }
             } catch (e) {
-                alert("Hata (Error): " + e.message);
+                alert("Hata: " + e.message);
             } finally {
                 btn.disabled = false;
                 btn.innerText = "Sisteme Kaydet";
@@ -422,29 +501,124 @@
 
         function loadPatients() {
             fetch(`${API}/patients`, { headers: authHeaders() }).then(r => {
-                if (r.status === 401) {
-                    showLogin();
-                    throw new Error('Yetkilendirme gerekiyor.');
-                }
+                if (r.status === 401) { showLogin(); throw new Error('Auth'); }
                 return r.json();
             }).then(data => {
+                const role = localStorage.getItem(ROLE_KEY) || 'doctor';
                 const countLabel = document.getElementById('patientCount');
-                if (Array.isArray(data)) {
-                    countLabel.innerText = `${data.length} hasta bulundu`;
-                } else {
-                    countLabel.innerText = 'Hasta listesi yüklenemedi';
-                }
+                const arr = Array.isArray(data) ? data : [];
+                countLabel.innerText = `${arr.length} hasta bulundu`;
 
-                document.getElementById('patientList').innerHTML = (Array.isArray(data) ? data : []).map(p => `
-                    <div class="w-full text-left p-4 bg-gray-800 rounded-2xl border border-gray-700/50">
-                        <span class="truncate pr-2">📌 ${p.display}</span>
-                    </div>
-                `).join('') || '<p class="col-span-full text-gray-600 text-center text-xs mt-10 italic">Hasta bulunamadı.</p>';
+                document.getElementById('patientList').innerHTML = arr.map(p => {
+                    const deleteBtn = role === 'admin' 
+                        ? `<button onclick="event.stopPropagation(); deletePatient('${p.uuid}')" class="ml-auto text-red-400 hover:text-red-300 hover:bg-red-500/20 rounded-lg px-2 py-1 text-xs transition" title="Hastayı Sil">🗑️</button>` 
+                        : '';
+                    const infoLine = [p.age ? `${p.age} yaş` : '', p.gender || '', p.scan_date || ''].filter(Boolean).join(' · ');
+                    return `
+                    <div class="w-full text-left p-4 bg-gray-800 rounded-2xl border border-gray-700/50 hover:border-blue-500/40 hover:bg-gray-750 cursor-pointer transition-all group" 
+                         onclick="openPatientDetail('${p.uuid}', '${(p.display||'').replace(/'/g,"\\'")}', '${p.age||''}', '${(p.gender||'').replace(/'/g,"\\'")}', '${p.scan_date||''}')">
+                        <div class="flex items-center">
+                            <div class="flex-1 min-w-0">
+                                <span class="truncate block text-sm font-medium">📌 ${p.display}</span>
+                                ${infoLine ? `<span class="block text-[11px] text-gray-500 mt-1">${infoLine}</span>` : ''}
+                            </div>
+                            ${deleteBtn}
+                        </div>
+                    </div>`;
+                }).join('') || '<p class="col-span-full text-gray-600 text-center text-xs mt-10 italic">Hasta bulunamadı.</p>';
             }).catch(() => {
                 document.getElementById('patientCount').innerText = 'Hasta yüklenemedi';
                 document.getElementById('patientList').innerHTML = '<p class="col-span-full text-gray-600 text-center text-xs mt-10 italic">Hasta yüklenirken bir hata oluştu.</p>';
             });
         }
+
+        async function deletePatient(uuid) {
+            if (!confirm('Bu hastayı silmek istediğinize emin misiniz? Bu işlem geri alınamaz.')) return;
+            try {
+                const res = await fetch(`${API}/patient/${uuid}`, {
+                    method: 'DELETE',
+                    headers: authHeaders()
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.detail || 'Silme hatası');
+                alert('Hasta başarıyla silindi.');
+                loadPatients();
+            } catch(e) {
+                alert('Silme Hatası: ' + e.message);
+            }
+        }
+
+        // --- DICOM SLICER ---
+        let slicerSlices = [];
+        let currentSlice = 0;
+
+        function openPatientDetail(uuid, name, age, gender, scanDate) {
+            document.getElementById('detailName').innerText = name || 'İsimsiz';
+            document.getElementById('detailAge').innerText = age || '—';
+            document.getElementById('detailGender').innerText = gender || '—';
+            document.getElementById('detailDate').innerText = scanDate || '—';
+            document.getElementById('patientDetailModal').classList.remove('hidden');
+
+            // Reset slicer
+            slicerSlices = [];
+            currentSlice = 0;
+            document.getElementById('slicerImage').classList.add('hidden');
+            document.getElementById('slicerControls').classList.add('hidden');
+            document.getElementById('slicerError').classList.add('hidden');
+            document.getElementById('slicerLoading').classList.remove('hidden');
+            document.getElementById('slicerLoading').innerText = 'Kesitler yükleniyor...';
+
+            loadSlices(uuid);
+        }
+
+        function closePatientDetail() {
+            document.getElementById('patientDetailModal').classList.add('hidden');
+            slicerSlices = [];
+        }
+
+        async function loadSlices(uuid) {
+            try {
+                const res = await fetch(`${API}/patient/${uuid}/slices`, { headers: authHeaders() });
+                if (!res.ok) throw new Error('Kesitler yüklenemedi');
+                const data = await res.json();
+                if (!data.slices || data.slices.length === 0) {
+                    document.getElementById('slicerLoading').innerText = 'Kesit bulunamadı.';
+                    return;
+                }
+                slicerSlices = data.slices;
+                currentSlice = 0;
+                document.getElementById('slicerLoading').classList.add('hidden');
+                document.getElementById('slicerImage').classList.remove('hidden');
+                document.getElementById('slicerControls').classList.remove('hidden');
+                const slider = document.getElementById('sliceSlider');
+                slider.max = slicerSlices.length - 1;
+                slider.value = 0;
+                showSlice(0);
+            } catch(e) {
+                document.getElementById('slicerLoading').classList.add('hidden');
+                document.getElementById('slicerError').classList.remove('hidden');
+                console.error('Slice yükleme hatası:', e);
+            }
+        }
+
+        function showSlice(idx) {
+            if (idx < 0 || idx >= slicerSlices.length) return;
+            currentSlice = idx;
+            document.getElementById('slicerImage').src = slicerSlices[idx].data;
+            document.getElementById('sliceSlider').value = idx;
+            document.getElementById('sliceInfo').innerText = `${idx + 1} / ${slicerSlices.length}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('sliceSlider').addEventListener('input', e => {
+                showSlice(parseInt(e.target.value));
+            });
+            document.getElementById('slicerContainer').addEventListener('wheel', e => {
+                e.preventDefault();
+                if (e.deltaY > 0) showSlice(currentSlice + 1);
+                else showSlice(currentSlice - 1);
+            });
+        });
 
         checkAuth();
     </script>

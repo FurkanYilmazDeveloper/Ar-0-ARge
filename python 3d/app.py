@@ -273,7 +273,15 @@ async def create_doctor(data: dict, current_user: dict = Depends(require_admin))
 
 # --- 1. PATIENT UPLOAD ---
 @app.post("/upload-patient")
-async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(...), organ: str = Form(None), current_user: dict = Depends(get_current_user)):
+async def upload_patient(
+    files: List[UploadFile] = File(...),
+    name: str = Form(...),
+    organ: str = Form(None),
+    gender: str = Form(None),
+    age: str = Form(None),
+    scan_date: str = Form(None),
+    current_user: dict = Depends(get_current_user)
+):
     patient_uuid = None
     upload_count = 0
     uploader = current_user.get("username")
@@ -327,6 +335,12 @@ async def upload_patient(files: List[UploadFile] = File(...), name: str = Form(.
         }
         if patient_organ:
             update_data["allowed_organ"] = patient_organ
+        if gender:
+            update_data["gender"] = gender
+        if age:
+            update_data["age"] = age
+        if scan_date:
+            update_data["scan_date"] = scan_date
 
         hastalar_col.update_one(
             {"orthanc_id": patient_uuid},
@@ -352,17 +366,114 @@ async def get_patients(current_user: dict = Depends(get_current_user)):
             if allowed_organ:
                 query["$or"].append({"allowed_organ": allowed_organ})
         docs = list(hastalar_col.find(query).sort("createdAt", -1))
-        return [{"uuid": d.get("orthanc_id") or str(d.get("_id")), "display": d.get("name") or "İsimsiz"} for d in docs]
+        return [{
+            "uuid": d.get("orthanc_id") or str(d.get("_id")),
+            "display": d.get("name") or "İsimsiz",
+            "gender": d.get("gender", ""),
+            "age": d.get("age", ""),
+            "scan_date": d.get("scan_date", ""),
+            "orthanc_id": d.get("orthanc_id", "")
+        } for d in docs]
     except HTTPException:
         raise
     except Exception as e:
         print(f"Error fetching patients: {e}")
         return []
 
-# --- DELETE PATIENT ---
+# --- 3. GET PATIENT SLICES (DICOM Slicer) ---
+@app.get("/patient/{patient_uuid}/slices")
+async def get_patient_slices(patient_uuid: str, current_user: dict = Depends(get_current_user)):
+    """Orthanc'taki hastanın kesit görüntülerini base64 JPEG olarak döner."""
+    try:
+        # Orthanc'tan hastanın study'lerini al
+        patient_res = requests.get(
+            f"{ORTHANC_URL}/patients/{patient_uuid}",
+            auth=('orthanc', 'orthanc'),
+            timeout=10
+        )
+        if patient_res.status_code != 200:
+            raise HTTPException(status_code=404, detail="Hasta Orthanc'ta bulunamadı.")
+        
+        patient_data = patient_res.json()
+        studies = patient_data.get("Studies", [])
+        
+        if not studies:
+            return {"slices": [], "total": 0}
+        
+        # İlk study'den series'leri al
+        all_instances = []
+        for study_id in studies:
+            study_res = requests.get(
+                f"{ORTHANC_URL}/studies/{study_id}",
+                auth=('orthanc', 'orthanc'),
+                timeout=10
+            ).json()
+            for series_id in study_res.get("Series", []):
+                series_res = requests.get(
+                    f"{ORTHANC_URL}/series/{series_id}",
+                    auth=('orthanc', 'orthanc'),
+                    timeout=10
+                ).json()
+                all_instances.extend(series_res.get("Instances", []))
+        
+        if not all_instances:
+            return {"slices": [], "total": 0}
+        
+        # Instance'ları sıralamak için instance number'ları al
+        instance_info = []
+        for inst_id in all_instances:
+            try:
+                tags_res = requests.get(
+                    f"{ORTHANC_URL}/instances/{inst_id}/simplified-tags",
+                    auth=('orthanc', 'orthanc'),
+                    timeout=5
+                ).json()
+                instance_number = int(tags_res.get("InstanceNumber", 0))
+                instance_info.append({"id": inst_id, "number": instance_number})
+            except Exception:
+                instance_info.append({"id": inst_id, "number": 0})
+        
+        # Instance number'a göre sırala
+        instance_info.sort(key=lambda x: x["number"])
+        
+        # Her instance için preview al ve base64'e çevir
+        slices = []
+        for info in instance_info:
+            try:
+                img_res = requests.get(
+                    f"{ORTHANC_URL}/instances/{info['id']}/preview",
+                    auth=('orthanc', 'orthanc'),
+                    timeout=10
+                )
+                if img_res.status_code == 200:
+                    img_b64 = base64.b64encode(img_res.content).decode('utf-8')
+                    content_type = img_res.headers.get('Content-Type', 'image/png')
+                    slices.append({
+                        "data": f"data:{content_type};base64,{img_b64}",
+                        "instance_number": info["number"]
+                    })
+            except Exception as e:
+                print(f"Slice yükleme hatası (instance {info['id']}): {e}")
+                continue
+        
+        return {"slices": slices, "total": len(slices)}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Slice endpoint hatası: {e}")
+        raise HTTPException(status_code=500, detail=f"Kesit görüntüleri yüklenemedi: {str(e)}")
+
+
+# --- 4. DELETE PATIENT (Sadece Admin) ---
 @app.delete("/patient/{patient_uuid}")
-async def delete_patient(patient_uuid: str):
+async def delete_patient(patient_uuid: str, current_user: dict = Depends(get_current_user)):
     from bson import ObjectId
+    
+    # Sadece admin silebilsin
+    if current_user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Yalnızca admin hastayı silebilir.")
+    
     try:
         # 1. MONGODB'den Sil
         res = hastalar_col.delete_one({"orthanc_id": patient_uuid})
