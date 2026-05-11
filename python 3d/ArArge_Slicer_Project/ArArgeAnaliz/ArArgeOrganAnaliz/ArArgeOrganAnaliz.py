@@ -1,6 +1,6 @@
 import slicer
 from slicer.ScriptedLoadableModule import *
-import qt, requests, os, json
+import qt, requests, os, json, vtk
 
 class ArArgeOrganAnaliz(ScriptedLoadableModule):
     def __init__(self, parent):
@@ -85,6 +85,21 @@ class ArArgeOrganAnalizWidget(ScriptedLoadableModuleWidget):
         self.toggle3DBtn.clicked.connect(self.onToggle3D)
         self.layout.addWidget(self.toggle3DBtn)
 
+        # Organ Visibility Group
+        self.organVisibilityGroup = qt.QGroupBox("👁️ Organ Görünürlüğü (Aç/Kapat)")
+        self.organVisibilityGroup.visible = False
+        self.organVisibilityLayout = qt.QVBoxLayout(self.organVisibilityGroup)
+        
+        self.scrollArea = qt.QScrollArea()
+        self.scrollArea.setWidgetResizable(True)
+        self.scrollArea.setFixedHeight(150)
+        self.scrollWidget = qt.QWidget()
+        self.scrollLayout = qt.QGridLayout(self.scrollWidget)
+        self.scrollArea.setWidget(self.scrollWidget)
+        self.organVisibilityLayout.addWidget(self.scrollArea)
+        
+        self.layout.addWidget(self.organVisibilityGroup)
+
         self.layout.addStretch(1)
 
     def onLogin(self):
@@ -136,6 +151,7 @@ class ArArgeOrganAnalizWidget(ScriptedLoadableModuleWidget):
         self.patientGroup.visible = False
         self.analysisBtn.visible = False
         self.toggle3DBtn.visible = False
+        self.organVisibilityGroup.visible = False
         
         self.statusLabel.text = "Durum: Oturum Kapatıldı"
         self.statusLabel.setStyleSheet("color: #6b7280; font-size: 10px;")
@@ -189,3 +205,56 @@ class ArArgeOrganAnalizWidget(ScriptedLoadableModuleWidget):
         if displayNode: displayNode.SetVisibility3D(True)
         layoutManager = slicer.app.layoutManager()
         layoutManager.threeDWidget(0).threeDView().resetFocalPoint()
+        
+        self.populateOrganButtons(node)
+
+    def populateOrganButtons(self, segmentationNode):
+        self.organVisibilityGroup.visible = True
+        
+        # Clear existing buttons
+        for i in reversed(range(self.scrollLayout.count())): 
+            item = self.scrollLayout.itemAt(i)
+            if item.widget():
+                item.widget().setParent(None)
+                
+        segmentation = segmentationNode.GetSegmentation()
+        segmentIDs = vtk.vtkStringArray()
+        segmentation.GetSegmentIDs(segmentIDs)
+        
+        displayNode = segmentationNode.GetDisplayNode()
+        
+        row = 0
+        col = 0
+        for i in range(segmentIDs.GetNumberOfValues()):
+            segmentID = segmentIDs.GetValue(i)
+            segment = segmentation.GetSegment(segmentID)
+            segmentName = segment.GetName()
+            color = segment.GetColor()
+            
+            btn = qt.QPushButton(segmentName)
+            btn.setCheckable(True)
+            # Both 2D and 3D visibility can be set. Let's just toggle the segment's general visibility.
+            btn.setChecked(displayNode.GetSegmentVisibility(segmentID))
+            
+            r, g, b = int(color[0]*255), int(color[1]*255), int(color[2]*255)
+            
+            self.updateBtnStyle(btn, btn.isChecked(), r, g, b)
+            
+            # Using default argument binding in lambda to avoid late binding issues
+            btn.toggled.connect(lambda checked, sID=segmentID, button=btn, red=r, green=g, blue=b, dNode=displayNode: self.onOrganToggled(checked, sID, button, red, green, blue, dNode))
+            
+            self.scrollLayout.addWidget(btn, row, col)
+            col += 1
+            if col > 1: # 2 columns
+                col = 0
+                row += 1
+
+    def updateBtnStyle(self, button, checked, r, g, b):
+        if checked:
+            button.setStyleSheet(f"background-color: rgb({r},{g},{b}); color: white; font-weight: bold; border-radius: 5px; padding: 5px; margin: 2px;")
+        else:
+            button.setStyleSheet(f"background-color: #374151; color: #9ca3af; border: 1px solid rgb({r},{g},{b}); border-radius: 5px; padding: 5px; margin: 2px;")
+
+    def onOrganToggled(self, checked, segmentID, button, r, g, b, displayNode):
+        displayNode.SetSegmentVisibility(segmentID, checked)
+        self.updateBtnStyle(button, checked, r, g, b)
